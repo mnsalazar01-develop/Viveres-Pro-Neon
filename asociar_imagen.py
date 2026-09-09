@@ -49,29 +49,28 @@ def obtener_lista_productos():
 
 # --- FUNCIÓN PARA SUBIR A IMGBB ---
 def subir_imagen_a_album(imagen_bytes, nombre_producto):
-    url_api = "https://imgbb.com"
+    # Corrección crítica: La URL debe apuntar al endpoint /1/upload e incluir la KEY en la dirección
+    url_api = f"https://imgbb.com{IMGBB_API_KEY}"
     try:
-        # Sanitizar el nombre para que no lleve espacios problemáticos en el envío de archivos
+        # Sanitizar el nombre para evitar caracteres extraños en los servidores de ImgBB
         nombre_limpio_api = f"prod_{nombre_producto.replace(' ', '_').lower()}"
         
-        # Parámetros obligatorios en la URL/Data string
+        # Parámetros secundarios del cuerpo
         payload = {
-            "key": IMGBB_API_KEY,
             "album_id": IMGBB_ALBUM_ID,
             "name": nombre_limpio_api
         }
         
-        # Enviamos el archivo de forma binaria nativa (multipart/form-data)
-        # Esto es mucho más ligero y reduce errores de procesamiento en ImgBB
+        # Enviamos la foto como datos binarios reales (Multipart)
         files = {
             "image": (f"{nombre_limpio_api}.png", imagen_bytes, "image/png")
         }
         
-        respuesta = requests.post(url_api, data=payload, files=files)
+        # Ejecutar la petición POST con un tiempo de espera para evitar congelamientos
+        respuesta = requests.post(url_api, data=payload, files=files, timeout=30)
         
-        # Validar si el servidor respondió con un código de error HTTP
         if respuesta.status_code != 200:
-            st.error(f"❌ Error de red ImgBB (Código {respuesta.status_code}): El servidor rechazó la solicitud.")
+            st.error(f"❌ Error de red ImgBB (Código HTTP {respuesta.status_code}): El servidor denegó la operación.")
             return None
             
         resultado = respuesta.json()
@@ -80,12 +79,14 @@ def subir_imagen_a_album(imagen_bytes, nombre_producto):
         else:
             st.error(f"❌ Error ImgBB: {resultado.get('error', {}).get('message')}")
             return None
+            
     except requests.exceptions.JSONDecodeError:
-        st.error("❌ Fallo en ImgBB: La API devolvió una respuesta vacía o un código HTML inválido en lugar de JSON. Inténtalo de nuevo en unos segundos.")
+        st.error("❌ Fallo en ImgBB: La API sigue devolviendo una respuesta HTML inválida. Verifica que tu API Key sea correcta y que el álbum no esté lleno.")
         return None
     except Exception as e:
         st.error(f"❌ Error al procesar la subida: {e}")
         return None
+
 
 
 # --- FUNCIÓN PARA GUARDAR EN NEON ---
