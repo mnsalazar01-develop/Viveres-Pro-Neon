@@ -7,9 +7,9 @@ import re
 from difflib import SequenceMatcher
 
 # --- CONFIGURACIÓN DE LA INTERFAZ DE STREAMLIT ---
-st.set_page_config(page_title="Asociador Pro V2", page_icon="📸", layout="centered")
+st.set_page_config(page_title="Asociador Pro V2", page_icon="📸", layout="wide") # Layout ancho para la grilla
 st.title("📸 Administrador de Imágenes de Productos (Neon + ImgBB)")
-st.write("Selecciona un producto y el sistema buscará o subirá su imagen de forma inteligente.")
+st.write("Selecciona un producto individual o procesa imágenes de forma masiva con validación visual.")
 
 # Cargar secretos de forma segura desde Streamlit Cloud
 try:
@@ -45,21 +45,6 @@ def obtener_lista_productos():
     finally:
         if conn:
             conn.close()
-
-# --- FUNCIÓN PARA OBTENER TODAS LAS IMÁGENES DEL ÁLBUM VÍA API ---
-@st.cache_data(ttl=300)
-def obtener_todas_las_imagenes_imgbb():
-    """Conecta a la API de ImgBB y extrae el listado completo de imágenes del álbum."""
-    url_api = f"https://imgbb.com{IMGBB_ALBUM_ID}"
-    parametros = {"key": IMGBB_API_KEY}
-    try:
-        respuesta = requests.get(url_api, params=parametros)
-        resultado = respuesta.json()
-        if resultado.get("status") == 200 and "data" in resultado:
-            return resultado["data"].get("images", [])
-        return []
-    except:
-        return []
 
 # --- FUNCIÓN PARA SUBIR A IMGBB ---
 def subir_imagen_a_album(imagen_bytes, nombre_producto):
@@ -117,45 +102,40 @@ def guardar_url_en_neon(id_producto, url_foto):
     finally:
         if conn:
             conn.close()
-
 # --- FLUJO PRINCIPAL DEL PROGRAMA ---
 catalogo = obtener_lista_productos()
 
 if not catalogo:
     st.warning("⚠️ No se encontraron productos en la tabla 'productos' o la base de datos está vacía.")
 else:
-    # 1. Buscador de productos con identidad completa
-    producto_seleccionado = st.selectbox(
-        "1. Selecciona el Producto:",
-        options=catalogo,
-        format_func=lambda prod: f"{prod['nombre'] or ''} {prod['marca'] or ''} {prod['tamano'] or ''} {prod['unidad'] or ''}".strip()
-    )
-    
-    id_prod = producto_seleccionado['id_producto']
-    
-    # Construcción de la identidad completa para la comparación inteligente
-    componentes = [
-        str(producto_seleccionado["nombre"] or ""),
-        str(producto_seleccionado["marca"] or ""),
-        str(producto_seleccionado["tamano"] or ""),
-        str(producto_seleccionado["unidad"] or "")
-    ]
-    identidad_completa = " ".join([c.strip() for c in componentes if c.strip()])
-    nombre_prod_limpio = limpiar_texto(identidad_completa)
-    palabras_producto = set(nombre_prod_limpio.split())
-
-    st.write("---")
-
-    # 2. Selector de modalidad
+    # Selector de modalidad global
     opcion_metodo = st.radio(
-        "2. Selecciona el método para la imagen:",
-        options=["Subir imagen desde la computadora", "Asociar a imagen existente en el álbum"]
+        "⚙️ Selecciona el método de trabajo:",
+        options=["Subir imagen individual desde la computadora", "Carga masiva desde la computadora con Grilla de Validación"],
+        horizontal=True
     )
 
     st.write("---")
 
-    # === MODALIDAD 1: SUBIR DESDE DISCO ===
-    if opcion_metodo == "Subir imagen desde la computadora":
+    # === MODALIDAD 1: INDIVIDUAL ===
+    if opcion_metodo == "Subir imagen individual desde la computadora":
+        # Buscador de productos con identidad completa
+        producto_seleccionado = st.selectbox(
+            "1. Selecciona el Producto:",
+            options=catalogo,
+            format_func=lambda prod: f"{prod['nombre'] or ''} {prod['marca'] or ''} {prod['tamano'] or ''} {prod['unidad'] or ''}".strip()
+        )
+        
+        id_prod = producto_seleccionado['id_producto']
+        
+        componentes = [
+            str(producto_seleccionado["nombre"] or ""),
+            str(producto_seleccionado["marca"] or ""),
+            str(producto_seleccionado["tamano"] or ""),
+            str(producto_seleccionado["unidad"] or "")
+        ]
+        identidad_completa = " ".join([c.strip() for c in componentes if c.strip()])
+
         archivo_imagen = st.file_uploader("Selecciona o arrastra la imagen del producto", type=["jpg", "jpeg", "png", "webp"])
         
         if archivo_imagen is not None:
@@ -182,41 +162,34 @@ else:
                             st.rerun()
         else:
             st.info("💡 Sube una imagen desde tu PC para habilitar el botón de guardado.")
-  
-    # === MODALIDAD 2: INYECTOR MASIVO DESDE LA COMPUTADORA ===
-    elif opcion_metodo == "Asociar a imagen existente en el álbum":
-        st.write("🚀 **Inyector Masivo Automático (Sáltate la web de ImgBB)**")
-        st.info("💡 Olvídate de la página de ImgBB. Arrastra aquí todas las fotos de tus productos juntas. El sistema las subirá automáticamente a internet, buscará a qué producto pertenecen y las guardará en Neon.")
 
-        # Permitir seleccionar múltiples archivos locales a la vez
+    # === MODALIDAD 2: CARGA MASIVA LOCAL CON GRILLA INTERACTIVA (TU IDEA) ===
+    elif opcion_metodo == "Carga masiva desde la computadora con Grilla de Validación":
+        st.write("🚀 **Buscador Inteligente con Grilla Masiva** (Evita cruzar café con carne molida)")
+        st.info("💡 Arrastra aquí todas las fotos de tus productos juntas. El sistema buscará a qué producto corresponden y armará una grilla visual con sus checks.")
+
         archivos_locales = st.file_uploader(
-            "Selecciona o arrastra múltiples imágenes de productos:", 
+            "Selecciona o arrastra múltiples imágenes de productos de tu PC:", 
             type=["jpg", "jpeg", "png", "webp"], 
             accept_multiple_files=True
         )
 
-        umbral_confianza = st.slider("Ajustar nivel de precisión mínimo (%)", min_value=50, max_value=100, value=75, step=5, key="slider_masivo")
+        umbral_confianza = st.slider("Ajustar nivel de precisión mínimo (%)", min_value=40, max_value=100, value=75, step=5)
         umbral_decimal = umbral_confianza / 100.0
 
         if archivos_locales:
-            st.success(f"📦 Has cargado **{len(archivos_locales)}** imágenes en la cola de procesamiento.")
+            coincidencias_calculadas = []
             
-            if st.button("🔥 Iniciar Procesamiento e Inyección Masiva", type="primary", use_container_width=True):
-                progreso = st.progress(0)
-                contador_exitos = 0
-                
-                # Obtener el catálogo de productos actualizado en memoria
-                lista_productos = obtener_lista_productos()
-                
-                for index, archivo in enumerate(archivos_locales):
+            with st.spinner("Analizando nombres de archivos locales y buscando coincidencias..."):
+                for archivo in archivos_locales:
                     nombre_archivo_limpio = limpiar_texto(archivo.name)
                     palabras_img = set(nombre_archivo_limpio.split())
                     
                     mejor_similitud = 0.0
                     producto_asociado = None
                     
-                    # 1. Buscar de manera inteligente a qué producto de Neon pertenece esta foto
-                    for prod in lista_productos:
+                    # Comparar de forma inteligente contra todo el catálogo cargado en memoria
+                    for prod in catalogo:
                         componentes = [
                             str(prod["nombre"] or ""),
                             str(prod["marca"] or ""),
@@ -236,7 +209,7 @@ else:
                             mejor_similitud = similitud
                             producto_asociado = prod
                     
-                    # 2. Si pasa el umbral de confianza, la subimos a ImgBB y la guardamos en Neon
+                    # Si supera el umbral, lo empaquetamos temporalmente para la grilla
                     if mejor_similitud >= umbral_decimal and producto_asociado:
                         componentes_asoc = [
                             str(producto_asociado["nombre"] or ""),
@@ -246,20 +219,74 @@ else:
                         ]
                         nombre_final_prod = " ".join([c.strip() for c in componentes_asoc if c.strip()])
                         
-                        st.write(f"🔄 Procesando: `{archivo.name}` ➡️ Asociado a `{nombre_final_prod}` ({mejor_similitud*100:.1f}%)")
-                        
-                        # Subir archivo directamente a la API de ImgBB usando sus bytes
-                        url_nueva_imgbb = subir_imagen_a_album(archivo.getvalue(), nombre_final_prod)
-                        
-                        if url_nueva_imgbb:
-                            # Guardar en Neon
-                            if guardar_url_en_neon(producto_asociado["id_producto"], url_nueva_imgbb):
-                                contador_exitos += 1
+                        coincidencias_calculadas.append({
+                            "id_producto": producto_asociado["id_producto"],
+                            "Producto sugerido en Neon": nombre_final_prod,
+                            "Archivo Local": archivo.name,
+                            "Porcentaje Confianza": f"{mejor_similitud * 100:.1f}%",
+                            "Validar": True,  # Marcado por defecto para agilizar tu flujo
+                            "_file_object": archivo  # Guardamos el puntero al archivo para subirlo después
+                        })
+
+            # Renderizado de la grilla interactiva si hay resultados
+            if coincidencias_calculadas:
+                st.write("---")
+                st.subheader(f"📋 Grilla de Verificación Masiva ({len(coincidencias_calculadas)} coincidencias listas)")
+                st.write("Revisa la lista. Si detectas un error, simplemente **desmarca la casilla** en la columna ¿Es correcto?.")
+
+                df_grilla = pd.DataFrame(coincidencias_calculadas)
+
+                # Mostramos la tabla editable al usuario (ocultando el objeto interno del archivo)
+                grilla_editada = st.data_editor(
+                    df_grilla,
+                    column_config={
+                        "Producto sugerido en Neon": st.column_config.TextColumn("Producto en Base de Datos", width="large", disabled=True),
+                        "Archivo Local": st.column_config.TextColumn("Nombre del Archivo Local", width="medium", disabled=True),
+                        "Porcentaje Confianza": st.column_config.TextColumn("Confianza", disabled=True),
+                        "Validar": st.column_config.CheckboxColumn("¿Es correcto?", help="Mantén marcado para subir a ImgBB y guardar en Neon"),
+                        "id_producto": None,    # Ocultar columna técnica
+                        "_file_object": None    # Ocultar columna técnica
+                    },
+                    disabled=["Producto sugerido en Neon", "Archivo Local", "Porcentaje Confianza"],
+                    hide_index=True,
+                    use_container_width=True
+                )
+
+                st.write("---")
+                st.warning("⚠️ Al presionar el botón, el sistema subirá de manera automática las imágenes aprobadas a ImgBB y las inyectará en Neon.")
+
+                if st.button("🔥 Procesar y Guardar Cambios Aprobados", type="primary", use_container_width=True):
+                    # Filtrar qué filas dejó el usuario con el check en True
+                    filas_aprobadas_indices = grilla_editada[grilla_editada["Validar"] == True].index.tolist()
+
+                    if not filas_aprobadas_indices:
+                        st.warning("⚠️ No seleccionaste ninguna fila para procesar.")
                     else:
-                        st.warning(f"⚠️ Saltado: `{archivo.name}` no encontró un producto compatible en la base de datos con suficiente confianza.")
-                    
-                    # Actualizar barra de progreso de la interfaz
-                    progreso.progress((index + 1) / len(archivos_locales))
-                
-                st.success(f"🎉 ¡Proceso terminado! Se subieron y asociaron con éxito **{contador_exitos}** de **{len(archivos_locales)}** imágenes en Neon.")
-                st.balloons()
+                        progreso = st.progress(0)
+                        exitos = 0
+
+                        for i, idx in enumerate(filas_aprobadas_indices):
+                            # Rescatamos el objeto original del archivo que está guardado en la lista inicial
+                            datos_origen = coincidencias_calculadas[idx]
+                            archivo_original = datos_origen["_file_object"]
+                            id_producto_neon = datos_origen["id_producto"]
+                            nombre_para_url = datos_origen["Producto sugerido en Neon"]
+
+                            st.write(f"🔄 Subiendo `{archivo_original.name}` a ImgBB e inyectando en Neon...")
+
+                            # 1. Subir los bytes a internet vía la API
+                            url_imgbb = subir_imagen_a_album(archivo_original.getvalue(), nombre_para_url)
+                            
+                            # 2. Si se generó el enlace, lo guardamos en la fila de la base de datos
+                            if url_imgbb:
+                                if guardar_url_en_neon(id_producto_neon, url_imgbb):
+                                    exitos += 1
+
+                            progreso.progress((i + 1) / len(filas_aprobadas_indices))
+                        
+                        st.success(f"🎉 ¡Inyección masiva completada! Se guardaron con éxito **{exitos}** de **{len(filas_aprobadas_indices)}** productos en Neon.")
+                        st.balloons()
+                        st.rerun()
+            else:
+                st.warning("⚠️ No se encontraron productos coincidentes para los nombres de estas fotos bajo el umbral de confianza actual.")
+
