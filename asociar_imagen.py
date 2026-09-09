@@ -46,27 +46,24 @@ def obtener_lista_productos():
         if conn:
             conn.close()
 
-# --- FUNCIÓN PARA OBTENER TODAS LAS IMÁGENES DEL ÁLBUM VÍA API (Sáltase el límite de 60) ---
-@st.cache_data(ttl=300)  # Cache de 5 minutos para no saturar la API
+# --- FUNCIÓN PARA OBTENER TODAS LAS IMÁGENES DEL ÁLBUM VÍA API ---
+@st.cache_data(ttl=300)
 def obtener_todas_las_imagenes_imgbb():
     """Conecta a la API de ImgBB y extrae el listado completo de imágenes del álbum."""
-    # Nota: ImgBB no ofrece un endpoint nativo abierto de listado público estándar sin paginar en su API básica v1, 
-    # por lo que habitualmente se emula la lectura del feed del álbum si está configurado como público o mediante scraping técnico.
-    # Para asegurar compatibilidad total con tu cuenta, procesaremos las URLs que la API nos permita trackear.
     url_api = f"https://imgbb.com{IMGBB_ALBUM_ID}"
-     parametros = {"key": IMGBB_API_KEY}
-     try:
-         respuesta = requests.get(url_api, params=parametros)
-         resultado = respuesta.json()
-         if resultado.get("status") == 200 and "data" in resultado:
-             return resultado["data"].get("images", [])
-         return []
-     except:
-         return []
+    parametros = {"key": IMGBB_API_KEY}
+    try:
+        respuesta = requests.get(url_api, params=parametros)
+        resultado = respuesta.json()
+        if resultado.get("status") == 200 and "data" in resultado:
+            return resultado["data"].get("images", [])
+        return []
+    except:
+        return []
 
 # --- FUNCIÓN PARA SUBIR A IMGBB ---
 def subir_imagen_a_album(imagen_bytes, nombre_producto):
-    url_api = "https://api.imgbb.com/1/upload"
+    url_api = "https://imgbb.com"
     try:
         imagen_base64 = base64.b64encode(imagen_bytes).decode('utf-8')
         datos = {
@@ -152,7 +149,7 @@ else:
     # 2. Selector de modalidad
     opcion_metodo = st.radio(
         "2. Selecciona el método para la imagen:",
-        options=["Subir imagen desde la computadora", "Escanear y asociar automáticamente desde el álbum de ImgBB"]
+        options=["Subir imagen desde la computadora", "Asociar a imagen existente en el álbum"]
     )
 
     st.write("---")
@@ -186,7 +183,7 @@ else:
         else:
             st.info("💡 Sube una imagen desde tu PC para habilitar el botón de guardado.")
 
-    # === MODALIDAD 2: ESCANEO AUTOMÁTICO DE ÁLBUM (CORREGIDO Y COMPLETADO) ===
+    # === MODALIDAD 2: ESCANEO AUTOMÁTICO DE ÁLBUM ===
     elif opcion_metodo == "Asociar a imagen existente en el álbum":
         st.write("🔍 **Buscador Inteligente Anti-Errores** (Evita cruzar café con carne molida)")
         
