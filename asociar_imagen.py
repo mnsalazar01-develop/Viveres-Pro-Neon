@@ -49,22 +49,22 @@ def obtener_lista_productos():
 
 # --- FUNCIÓN PARA SUBIR A IMGBB ---
 def subir_imagen_a_album(imagen_bytes, nombre_producto):
-    # Definimos la URL de la API de forma explícita y limpia, sin variables pegadas
-    url_api = "https://imgbb.com"
+    # Endpoint definitivo y estricto de la API oficial de ImgBB
+    url_api = "https://api.imgbb.com/1/upload"
     try:
-        # Convertimos la imagen a Base64 (método estándar súper compatible con ImgBB)
+        # Convertimos los bytes locales a formato Base64 estándar para asegurar compatibilidad
         imagen_base64 = base64.b64encode(imagen_bytes).decode('utf-8')
         
-        # Estructuramos los datos exactamente como los pide la documentación de ImgBB
+        # Parámetros que la documentación de ImgBB exige recibir en el cuerpo del POST
         datos = {
-            "key": IMGBB_API_KEY,      # Tu API Key real de los secrets
-            "image": imagen_base64,    # Los datos en base64 de la foto
-            "album_id": IMGBB_ALBUM_ID, # El ID de tu álbum
-            "name": f"prod_{nombre_producto.replace(' ', '_').lower()}"
+            "key": IMGBB_API_KEY,        # Clave API desde los secrets
+            "image": imagen_base64,      # Imagen codificada en Base64
+            "album_id": IMGBB_ALBUM_ID,  # El identificador de tu álbum de destino
+            "name": f"prod_{nombre_producto.replace(' ', '_').lower()}" # Nombre limpio
         }
         
-        # Hacemos la petición POST limpia
-        respuesta = requests.post(url_api, data=datos)
+        # Ejecutar la solicitud HTTP enviando los datos correspondientes
+        respuesta = requests.post(url_api, data=datos, timeout=30)
         resultado = respuesta.json()
         
         if resultado.get("status") == 200:
