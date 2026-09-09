@@ -51,23 +51,42 @@ def obtener_lista_productos():
 def subir_imagen_a_album(imagen_bytes, nombre_producto):
     url_api = "https://imgbb.com"
     try:
-        imagen_base64 = base64.b64encode(imagen_bytes).decode('utf-8')
-        datos = {
+        # Sanitizar el nombre para que no lleve espacios problemáticos en el envío de archivos
+        nombre_limpio_api = f"prod_{nombre_producto.replace(' ', '_').lower()}"
+        
+        # Parámetros obligatorios en la URL/Data string
+        payload = {
             "key": IMGBB_API_KEY,
-            "image": imagen_base64,
             "album_id": IMGBB_ALBUM_ID,
-            "name": f"prod_{nombre_producto.replace(' ', '_').lower()}"
+            "name": nombre_limpio_api
         }
-        respuesta = requests.post(url_api, data=datos)
+        
+        # Enviamos el archivo de forma binaria nativa (multipart/form-data)
+        # Esto es mucho más ligero y reduce errores de procesamiento en ImgBB
+        files = {
+            "image": (f"{nombre_limpio_api}.png", imagen_bytes, "image/png")
+        }
+        
+        respuesta = requests.post(url_api, data=payload, files=files)
+        
+        # Validar si el servidor respondió con un código de error HTTP
+        if respuesta.status_code != 200:
+            st.error(f"❌ Error de red ImgBB (Código {respuesta.status_code}): El servidor rechazó la solicitud.")
+            return None
+            
         resultado = respuesta.json()
         if resultado.get("status") == 200:
             return resultado["data"]["url"]
         else:
             st.error(f"❌ Error ImgBB: {resultado.get('error', {}).get('message')}")
             return None
+    except requests.exceptions.JSONDecodeError:
+        st.error("❌ Fallo en ImgBB: La API devolvió una respuesta vacía o un código HTML inválido en lugar de JSON. Inténtalo de nuevo en unos segundos.")
+        return None
     except Exception as e:
         st.error(f"❌ Error al procesar la subida: {e}")
         return None
+
 
 # --- FUNCIÓN PARA GUARDAR EN NEON ---
 def guardar_url_en_neon(id_producto, url_foto):
