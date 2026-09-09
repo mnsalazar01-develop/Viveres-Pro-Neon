@@ -5,6 +5,7 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 import re
 from difflib import SequenceMatcher
+import pandas as pd  # <--- ¡ESTA ES LA LÍNEA QUE FALTA AGREGAR!
 
 # --- CONFIGURACIÓN DE LA INTERFAZ DE STREAMLIT ---
 st.set_page_config(page_title="Asociador Pro V2", page_icon="📸", layout="wide") # Layout ancho para la grilla
