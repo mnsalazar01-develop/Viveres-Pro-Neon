@@ -14,24 +14,11 @@ except KeyError as e:
     st.error(f"❌ Error: Falta configurar la variable {e} en los Secrets de Streamlit.")
     st.stop()
 
-st.title("🔄 Vinculación Inteligente de Imágenes (Neon)")
-st.write("Pega tus códigos o enlaces de ImgBB. Puedes separarlos por comas, espacios o saltos de línea.")
+st.title("🔄 Vinculación Inteligente mediante CSV (Neon)")
+st.write("Sube el archivo CSV o Excel exportado con los enlaces de ImgBB para cruzarlos con tu base de datos.")
 
-# Caja de entrada en la aplicación web
-texto_imgbb = st.text_area(
-    "Pega aquí tus códigos de inserción de ImgBB:", 
-    height=250, 
-    placeholder="https://i.ibb.co/jv9wQf2F/carne-molida.jpg
-https://i.ibb.co/CKRGpQrT/Bistec-de-Res.jpg
-https://i.ibb.co/WNsMZwzc/0021165-jamon-cocido-superior-purolomo-250gr-450.jpg
-https://i.ibb.co/S7DF6xPK/05-2.jpg
-https://i.ibb.co/0Rw0yzTX/0021179-jamon-de-pierna-l-prado-250-gr-450.jpg
-https://i.ibb.co/BXxSYkm/0021946-jamon-de-pierna-charvenca-250-gr-450.jpg
-https://i.ibb.co/ZpgC7FwG/images4.jpg
-https://i.ibb.co/qFR5Chjx/jamon-arichuna-pierna-coc-300g.jpg
-https://i.ibb.co/VWjSMp9K/jamon-lapiroca-pierna.jpg
-https://i.ibb.co/cS7Q4rM4/jamon-cocido-estandar-alibal-250gr-450.jpg"
-)
+# Componente para subir el archivo de manera interactiva
+archivo_subido = st.file_uploader("Sube tu archivo CSV o Excel con los enlaces:", type=["csv", "xlsx"])
 
 # Función para limpiar texto y facilitar la comparación
 def limpiar_texto(texto):
@@ -43,13 +30,32 @@ def limpiar_texto(texto):
     return " ".join(texto.split())
 
 # 1. ANALIZAR Y BUSCAR COINCIDENCIAS
-if st.button("🔍 Analizar y Buscar Coincidencias"):
-    if not texto_imgbb.strip():
-        st.warning("⚠️ Por favor, pega los enlaces de ImgBB antes de continuar.")
+if st.button("🔍 Analizar Archivo y Buscar Coincidencias"):
+    if archivo_subido is None:
+        st.warning("⚠️ Por favor, primero sube un archivo CSV o Excel.")
     else:
         try:
-            # EXPRESIÓN REGULAR OPTIMIZADA: Corta limpiamente en comas, espacios, comillas o saltos de línea
-            urls_imgbb = re.findall(r'https://(?:i\.)?ibb\.co/[^\s,\"\'>]+', texto_imgbb)
+            # Leer el archivo dependiendo de su extensión
+            if archivo_subido.name.endswith('.csv'):
+                df_imagenes = pd.read_csv(archivo_subido)
+            else:
+                df_imagenes = pd.read_excel(archivo_subido)
+            
+            # Intentar detectar automáticamente la columna que contiene los enlaces de ImgBB
+            columna_url = None
+            for col in df_imagenes.columns:
+                if any(palabra in col.lower() for palabra in ["url", "link", "enlace", "href", "direct"]):
+                    columna_url = col
+                    break
+            
+            # Si no encuentra un nombre obvio, toma la primera columna del archivo
+            if not columna_url:
+                columna_url = df_imagenes.columns[0]
+                st.info(f"💡 No se detectó una columna con el nombre 'url'. Usando la primera columna: `{columna_url}`")
+
+            # Convertir las celdas de la columna seleccionada a texto plano para extraer las URLs
+            texto_completo_urls = " ".join(df_imagenes[columna_url].dropna().astype(str).tolist())
+            urls_imgbb = re.findall(r'https://(?:i\.)?ibb\.co/[^\s,\"\'>]+', texto_completo_urls)
 
             lista_imgbb = list()
             for url in urls_imgbb:
@@ -61,10 +67,10 @@ if st.button("🔍 Analizar y Buscar Coincidencias"):
                     "nombre_limpio": limpiar_texto(nombre_archivo)
                 })
 
-            st.info(f"📦 Se detectaron **{len(lista_imgbb)}** enlaces de ImgBB en el cuadro de texto.")
+            st.info(f"📦 Se procesaron **{len(lista_imgbb)}** enlaces de ImgBB desde el archivo `{archivo_subido.name}`.")
 
             if len(lista_imgbb) == 0:
-                st.error("❌ No se encontraron enlaces válidos de ImgBB. Revisa el formato.")
+                st.error("❌ No se encontraron enlaces válidos que apunten a ImgBB en la columna seleccionada.")
             else:
                 st.write("🔌 Conectando a la base de datos de Neon...")
                 conn = psycopg2.connect(url_limpia)
@@ -100,13 +106,12 @@ if st.button("🔍 Analizar y Buscar Coincidencias"):
                         })
 
                 if not actualizaciones:
-                    st.warning("⚠️ No se encontraron coincidencias con un umbral del 60%.")
+                    st.warning("⚠️ No se encontraron coincidencias automáticas. Prueba a renombrar los archivos del CSV con palabras clave similares a tus productos.")
                 else:
                     df_resumen = pd.DataFrame(actualizaciones)
                     df_resumen["confianza_porcentaje"] = df_resumen["confianza"].apply(lambda x: f"{x * 100:.1f}%")
                     
                     st.write("### --- RESUMEN DE COINCIDENCIAS DETECTADAS ---")
-                    # CORREGIDO: Se cambió 'imagen_detected' por 'imagen_detectada'
                     st.dataframe(df_resumen[["nombre", "imagen_detectada", "confianza_porcentaje"]])
                     
                     st.session_state["pendientes_actualizar"] = actualizaciones
@@ -115,7 +120,7 @@ if st.button("🔍 Analizar y Buscar Coincidencias"):
                 conn.close()
 
         except Exception as e:
-            st.error(f"❌ Ocurrió un error en el análisis: {e}")
+            st.error(f"❌ Ocurrió un error al procesar el archivo: {e}")
 
 # 2. APLICAR CAMBIOS EN LA BASE DE DATOS
 if "pendientes_actualizar" in st.session_state and st.session_state["pendientes_actualizar"]:
@@ -139,5 +144,4 @@ if "pendientes_actualizar" in st.session_state and st.session_state["pendientes_
             cursor.close()
             conn.close()
         except Exception as e:
-            st.error(f"❌ Error al guardar datos: {e}")
-
+            st.error(f"❌ Error al guardar los datos en Neon: {e}")
