@@ -588,7 +588,7 @@ with st.expander("➕ Crear Nuevo Producto en Neon", expanded=False):
         with col9:
             new_verif = st.checkbox("✔ Cod. Verif.", value=False)
 
-        col_img_up, col_img_prev = st.columns([2, 1])
+        col_img_up, col_img_prev = st.columns(2)
         with col_img_up:
             archivo_imagen = st.file_uploader("📷 Subir imagen del producto a ImgBB:", type=["png", "jpg", "jpeg", "webp", "gif"])
         with col_img_prev:
