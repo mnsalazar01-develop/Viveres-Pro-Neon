@@ -38,7 +38,8 @@ def mostrar_centro_control():
 pagina_inicio = st.Page(mostrar_centro_control, title="🏭 Centro de Control", icon="🏠", default=True)
 pagina_asociar = st.Page("asociar_imagen.py", title="Asociar Imagen", icon="📤")
 pagina_intelig = st.Page("asociacion_inteligente.py", title="Asociar Imagen Plus", icon="📤")
-pagina_grillap = st.Page("grilla_productos.py", title="Grilla_Productos", icon="📤")
+pagina_grillap = st.Page("grilla_productos.py", title="Grilla Productos", icon="📤")
+pagina_productos = st.Page("grilla_productos2.py", title="Grilla Productos Plus", icon="📤")
 pagina_carga_masiva = st.Page("carga_masiva_imagen.py", title="Carga Masiva Imagen", icon="📤")
 pagina_cargar_imagen = st.Page("cargar_campanas_imagen.py", title="📋 Cargar Imagen", icon="📋")
 pagina_cargar21 = st.Page("cargar_campanas_imagen2.py", title="📋 Cargar Imagen 2", icon="📋")
@@ -54,6 +55,7 @@ enrutador_global = st.navigation([
     pagina_intelig,
     pagina_carga_masiva,
     pagina_grillap,
+    pagina_productos,
     pagina_cargar_imagen,
     pagina_cargar21,
     pagina_maqueta,
