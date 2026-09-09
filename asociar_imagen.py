@@ -164,7 +164,7 @@ else:
         else:
             st.info("💡 Sube una imagen desde tu PC para habilitar el botón de guardado.")
 
-    # === MODALIDAD 2: CARGA MASIVA LOCAL CON GRILLA INTERACTIVA (TU IDEA) ===
+    # === MODALIDAD 2: CARGA MASIVA LOCAL CON GRILLA INTERACTIVA (CORREGIDA SIN ARROW ERROR) ===
     elif opcion_metodo == "Carga masiva desde la computadora con Grilla de Validación":
         st.write("🚀 **Buscador Inteligente con Grilla Masiva** (Evita cruzar café con carne molida)")
         st.info("💡 Arrastra aquí todas las fotos de tus productos juntas. El sistema buscará a qué producto corresponden y armará una grilla visual con sus checks.")
@@ -235,9 +235,14 @@ else:
                 st.subheader(f"📋 Grilla de Verificación Masiva ({len(coincidencias_calculadas)} coincidencias listas)")
                 st.write("Revisa la lista. Si detectas un error, simplemente **desmarca la casilla** en la columna ¿Es correcto?.")
 
-                df_grilla = pd.DataFrame(coincidencias_calculadas)
+                # CREACIÓN COMPATIBLE CON PYARROW: Creamos un DataFrame excluyendo el objeto de archivo crudo
+                columnas_visibles = [
+                    {k: v for k, v in item.items() if k != "_file_object"} 
+                    for item in coincidencias_calculadas
+                ]
+                df_grilla = pd.DataFrame(columnas_visibles)
 
-                # Mostramos la tabla editable al usuario (ocultando el objeto interno del archivo)
+                # Mostramos la tabla editable al usuario
                 grilla_editada = st.data_editor(
                     df_grilla,
                     column_config={
@@ -245,8 +250,7 @@ else:
                         "Archivo Local": st.column_config.TextColumn("Nombre del Archivo Local", width="medium", disabled=True),
                         "Porcentaje Confianza": st.column_config.TextColumn("Confianza", disabled=True),
                         "Validar": st.column_config.CheckboxColumn("¿Es correcto?", help="Mantén marcado para subir a ImgBB y guardar en Neon"),
-                        "id_producto": None,    # Ocultar columna técnica
-                        "_file_object": None    # Ocultar columna técnica
+                        "id_producto": None  # Ocultar columna técnica id
                     },
                     disabled=["Producto sugerido en Neon", "Archivo Local", "Porcentaje Confianza"],
                     hide_index=True,
@@ -267,7 +271,7 @@ else:
                         exitos = 0
 
                         for i, idx in enumerate(filas_aprobadas_indices):
-                            # Rescatamos el objeto original del archivo que está guardado en la lista inicial
+                            # Rescatamos el objeto de archivo original a través de la lista original usando el índice
                             datos_origen = coincidencias_calculadas[idx]
                             archivo_original = datos_origen["_file_object"]
                             id_producto_neon = datos_origen["id_producto"]
@@ -277,14 +281,14 @@ else:
 
                             # 1. Subir los bytes a internet vía la API
                             url_imgbb = subir_imagen_a_album(archivo_original.getvalue(), nombre_para_url)
-                            
+
                             # 2. Si se generó el enlace, lo guardamos en la fila de la base de datos
                             if url_imgbb:
                                 if guardar_url_en_neon(id_producto_neon, url_imgbb):
                                     exitos += 1
 
                             progreso.progress((i + 1) / len(filas_aprobadas_indices))
-                        
+
                         st.success(f"🎉 ¡Inyección masiva completada! Se guardaron con éxito **{exitos}** de **{len(filas_aprobadas_indices)}** productos en Neon.")
                         st.balloons()
                         st.rerun()
