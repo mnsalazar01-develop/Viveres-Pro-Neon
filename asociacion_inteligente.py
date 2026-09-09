@@ -14,18 +14,24 @@ except KeyError as e:
     st.error(f"❌ Error: Falta configurar la variable {e} en los Secrets de Streamlit.")
     st.stop()
 
-st.title("🔄 Vinculación Inteligente mediante CSV (Neon)")
-st.write("Sube el archivo CSV o Excel exportado con los enlaces de ImgBB para cruzarlos con tu base de datos.")
+st.title("🔄 Vinculación Inteligente Avanzada por CSV (Neon)")
+st.write("Sube tu archivo CSV o Excel. El sistema comparará usando Nombre, Marca, Tamaño y Unidad.")
 
 # Componente para subir el archivo de manera interactiva
 archivo_subido = st.file_uploader("Sube tu archivo CSV o Excel con los enlaces:", type=["csv", "xlsx"])
 
-# Función para limpiar texto y facilitar la comparación
+# Control interactivo para el umbral de confianza (Recomendado: 75% - 80%)
+umbral_confianza = st.slider("⚙️ Ajustar umbral de confianza mínimo para asociar:", min_value=40, max_value=100, value=75, step=5)
+umbral_decimal = umbral_confianza / 100.0
+
+# Función mejorada para limpiar y normalizar texto
 def limpiar_texto(texto):
     if not texto:
         return ""
     texto = str(texto).lower()
+    # Quitar extensiones de imagen comunes
     texto = re.sub(r'\.(jpg|jpeg|png|webp|gif|bmp)', '', texto)
+    # Reemplazar caracteres especiales por espacios
     texto = re.sub(r'[^a-z0-9áéíóúñ\s]', ' ', texto)
     return " ".join(texto.split())
 
@@ -41,19 +47,18 @@ if st.button("🔍 Analizar Archivo y Buscar Coincidencias"):
             else:
                 df_imagenes = pd.read_excel(archivo_subido)
             
-            # Intentar detectar automáticamente la columna que contiene los enlaces de ImgBB
+            # Detectar automáticamente la columna que contiene los enlaces de ImgBB
             columna_url = None
             for col in df_imagenes.columns:
                 if any(palabra in col.lower() for palabra in ["url", "link", "enlace", "href", "direct"]):
                     columna_url = col
                     break
             
-            # Si no encuentra un nombre obvio, toma la primera columna del archivo
             if not columna_url:
                 columna_url = df_imagenes.columns[0]
                 st.info(f"💡 No se detectó una columna con el nombre 'url'. Usando la primera columna: `{columna_url}`")
 
-            # Convertir las celdas de la columna seleccionada a texto plano para extraer las URLs
+            # Extraer las URLs válidas
             texto_completo_urls = " ".join(df_imagenes[columna_url].dropna().astype(str).tolist())
             urls_imgbb = re.findall(r'https://(?:i\.)?ibb\.co/[^\s,\"\'>]+', texto_completo_urls)
 
@@ -67,27 +72,49 @@ if st.button("🔍 Analizar Archivo y Buscar Coincidencias"):
                     "nombre_limpio": limpiar_texto(nombre_archivo)
                 })
 
-            st.info(f"📦 Se procesaron **{len(lista_imgbb)}** enlaces de ImgBB desde el archivo `{archivo_subido.name}`.")
+            st.info(f"📦 Se procesaron **{len(lista_imgbb)}** enlaces de ImgBB desde el archivo.")
 
             if len(lista_imgbb) == 0:
-                st.error("❌ No se encontraron enlaces válidos que apunten a ImgBB en la columna seleccionada.")
+                st.error("❌ No se encontraron enlaces válidos que apunten a ImgBB.")
             else:
-                st.write("🔌 Conectando a la base de datos de Neon...")
+                st.write("🔌 Conectando a Neon y descargando catálogo de productos...")
                 conn = psycopg2.connect(url_limpia)
                 cursor = conn.cursor(cursor_factory=RealDictCursor)
                 
-                cursor.execute("SELECT id_producto, nombre FROM public.productos;")
+                # Traemos nombre, marca, tamaño y unidad para armar la identidad completa
+                cursor.execute("SELECT id_producto, nombre, marca, tamano, unidad FROM public.productos;")
                 productos = cursor.fetchall()
 
                 actualizaciones = list()
                 
                 for prod in productos:
-                    nombre_prod_limpio = limpiar_texto(prod["nombre"])
+                    # Construir la identidad completa del producto de forma robusta
+                    componentes = [
+                        str(prod["nombre"] or ""),
+                        str(prod["marca"] or ""),
+                        str(prod["tamano"] or ""),
+                        str(prod["unidad"] or "")
+                    ]
+                    # Filtrar textos vacíos y unir con espacios
+                    nombre_completo_prod = " ".join([c.strip() for c in componentes if c.strip()])
+                    nombre_prod_limpio = limpiar_texto(nombre_completo_prod)
+                    
+                    # Obtener las palabras clave del nombre real para validación cruzada
+                    palabras_producto = set(nombre_prod_limpio.split())
+                    
                     mejor_similitud = 0.0
                     mejor_url = None
                     mejor_nombre_img = ""
                     
                     for img in lista_imgbb:
+                        palabras_img = set(img["nombre_limpio"].split())
+                        
+                        # VALIDACIÓN CRUCIAL: Si no comparten al menos una palabra clave principal
+                        # (por ejemplo, que la imagen contenga "cafe" si el producto es "cafe"), se descarta.
+                        if not palabras_producto.intersection(palabras_img):
+                            continue
+                            
+                        # Si pasa el filtro de palabras, medimos el parecido de la cadena completa
                         similitud = SequenceMatcher(None, nombre_prod_limpio, img["nombre_limpio"]).ratio()
                         
                         if similitud > mejor_similitud:
@@ -95,24 +122,24 @@ if st.button("🔍 Analizar Archivo y Buscar Coincidencias"):
                             mejor_url = img["url"]
                             mejor_nombre_img = img["nombre_limpio"]
                             
-                    # Si el parecido es igual o mayor al 60%
-                    if mejor_similitud >= 0.60:
+                    # Aplicar el filtro dinámico seleccionado por el usuario en el Slider
+                    if mejor_similitud >= umbral_decimal:
                         actualizaciones.append({
                             "id_producto": prod["id_producto"],
-                            "nombre": prod["nombre"],
+                            "producto_completo": nombre_completo_prod,
                             "imagen_detectada": mejor_nombre_img,
                             "url_nueva": mejor_url,
                             "confianza": mejor_similitud
                         })
 
                 if not actualizaciones:
-                    st.warning("⚠️ No se encontraron coincidencias automáticas. Prueba a renombrar los archivos del CSV con palabras clave similares a tus productos.")
+                    st.warning("⚠️ No se encontraron coincidencias con el umbral actual. Prueba bajando un poco el slider de confianza.")
                 else:
                     df_resumen = pd.DataFrame(actualizaciones)
                     df_resumen["confianza_porcentaje"] = df_resumen["confianza"].apply(lambda x: f"{x * 100:.1f}%")
                     
-                    st.write("### --- RESUMEN DE COINCIDENCIAS DETECTADAS ---")
-                    st.dataframe(df_resumen[["nombre", "imagen_detectada", "confianza_porcentaje"]])
+                    st.write(f"### --- COINCIDENCIAS DETECTADAS (Umbral mínimo: {umbral_confianza}%) ---")
+                    st.dataframe(df_resumen[["producto_completo", "imagen_detectada", "confianza_porcentaje"]])
                     
                     st.session_state["pendientes_actualizar"] = actualizaciones
                 
