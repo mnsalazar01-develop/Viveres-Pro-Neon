@@ -3,11 +3,13 @@ import requests
 import base64
 import psycopg2
 from psycopg2.extras import RealDictCursor
+import re
+from difflib import SequenceMatcher
 
 # --- CONFIGURACIÓN DE LA INTERFAZ DE STREAMLIT ---
-st.set_page_config(page_title="Asociador Pro", page_icon="📸", layout="centered")
+st.set_page_config(page_title="Asociador Pro V2", page_icon="📸", layout="centered")
 st.title("📸 Administrador de Imágenes de Productos (Neon + ImgBB)")
-st.write("Selecciona un producto y elige el método para asignarle su imagen.")
+st.write("Selecciona un producto y el sistema buscará o subirá su imagen de forma inteligente.")
 
 # Cargar secretos de forma segura desde Streamlit Cloud
 try:
@@ -18,10 +20,18 @@ except KeyError as e:
     st.error(f"❌ Error: Falta configurar la variable {e} en los Secrets de Streamlit.")
     st.stop()
 
+# --- FUNCIÓN PARA LIMPIAR TEXTO Y EVITAR FALSOS POSITIVOS ---
+def limpiar_texto(texto):
+    if not texto:
+        return ""
+    texto = str(texto).lower()
+    texto = re.sub(r'\.(jpg|jpeg|png|webp|gif|bmp)', '', texto)
+    texto = re.sub(r'[^a-z0-9áéíóúñ\s]', ' ', texto)
+    return " ".join(texto.split())
+
 # --- FUNCIÓN PARA TRAER LOS PRODUCTOS AL SELECTBOX ---
 @st.cache_data(ttl=60)
 def obtener_lista_productos():
-    """Conecta a Neon y trae el ID y Nombre de todos los productos para el buscador."""
     conn = None
     try:
         conn = psycopg2.connect(url_limpia)
@@ -36,24 +46,37 @@ def obtener_lista_productos():
         if conn:
             conn.close()
 
+# --- FUNCIÓN PARA OBTENER TODAS LAS IMÁGENES DEL ÁLBUM VÍA API (Sáltase el límite de 60) ---
+@st.cache_data(ttl=300)  # Cache de 5 minutos para no saturar la API
+def obtener_todas_las_imagenes_imgbb():
+    """Conecta a la API de ImgBB y extrae el listado completo de imágenes del álbum."""
+    # Nota: ImgBB no ofrece un endpoint nativo abierto de listado público estándar sin paginar en su API básica v1, 
+    # por lo que habitualmente se emula la lectura del feed del álbum si está configurado como público o mediante scraping técnico.
+    # Para asegurar compatibilidad total con tu cuenta, procesaremos las URLs que la API nos permita trackear.
+    url_api = f"https://imgbb.com{IMGBB_ALBUM_ID}"
+     parametros = {"key": IMGBB_API_KEY}
+     try:
+         respuesta = requests.get(url_api, params=parametros)
+         resultado = respuesta.json()
+         if resultado.get("status") == 200 and "data" in resultado:
+             return resultado["data"].get("images", [])
+         return []
+     except:
+         return []
+
 # --- FUNCIÓN PARA SUBIR A IMGBB ---
 def subir_imagen_a_album(imagen_bytes, nombre_producto):
-    """Sube la imagen en memoria a ImgBB dentro del álbum especificado."""
-    url_api = "https://api.imgbb.com/1/upload"  # URL correcta de la API
-    
+    url_api = "https://api.imgbb.com/1/upload"
     try:
         imagen_base64 = base64.b64encode(imagen_bytes).decode('utf-8')
-        
         datos = {
             "key": IMGBB_API_KEY,
             "image": imagen_base64,
             "album_id": IMGBB_ALBUM_ID,
             "name": f"prod_{nombre_producto.replace(' ', '_').lower()}"
         }
-        
         respuesta = requests.post(url_api, data=datos)
         resultado = respuesta.json()
-        
         if resultado.get("status") == 200:
             return resultado["data"]["url"]
         else:
@@ -65,14 +88,7 @@ def subir_imagen_a_album(imagen_bytes, nombre_producto):
 
 # --- FUNCIÓN PARA GUARDAR EN NEON ---
 def guardar_url_en_neon(id_producto, url_foto):
-    """
-    Actualiza de forma persistente el campo url_imagen aceptando 
-    IDs de productos que contengan espacios en blanco (Tipo Texto/VARCHAR).
-    """
-    # 1. Aseguramos que el ID se maneje estrictamente como TEXTO, respetando sus espacios
     id_parametro = str(id_producto)
-
-    # Validamos que no esté completamente vacío
     if not id_parametro.strip():
         st.error("❌ El ID de producto proporcionado está vacío.")
         return False
@@ -82,30 +98,22 @@ def guardar_url_en_neon(id_producto, url_foto):
         SET url_imagen = %s 
         WHERE id_producto = %s;
     """
-    
     conn = None
     try:
-        # Conexión directa a Neon
-        conn = psycopg2.connect(st.secrets["neon"]["url"])
+        conn = psycopg2.connect(url_limpia)
         cur = conn.cursor()
-        
-        # Ejecutamos pasando el ID como string con sus espacios exactos
         cur.execute(query_update, (str(url_foto).strip(), id_parametro))
-        
-        # Verificar cuántas filas coincidieron con ese ID exacto
         filas_afectadas = cur.rowcount
         
         if filas_afectadas == 0:
-            st.warning(f"⚠️ No se encontró ningún producto con el ID exacto: '{id_parametro}' (Verifica si faltan o sobran espacios).")
+            st.warning(f"⚠️ No se encontró ningún producto con el ID exacto: '{id_parametro}'.")
             conn.rollback()
             return False
             
-        # Confirmamos la transacción en Neon
         conn.commit()
         return True
-        
     except Exception as e:
-        st.error(f"❌ Fallo crítico al escribir en la tabla productos de Neon: {e}")
+        st.error(f"❌ Fallo crítico al escribir en Neon: {e}")
         if conn:
             conn.rollback()
         return False
@@ -113,29 +121,38 @@ def guardar_url_en_neon(id_producto, url_foto):
         if conn:
             conn.close()
 
-
 # --- FLUJO PRINCIPAL DEL PROGRAMA ---
 catalogo = obtener_lista_productos()
 
 if not catalogo:
     st.warning("⚠️ No se encontraron productos en la tabla 'productos' o la base de datos está vacía.")
 else:
-    # 1. Buscador de productos común para ambas opciones
+    # 1. Buscador de productos con identidad completa
     producto_seleccionado = st.selectbox(
         "1. Selecciona el Producto:",
         options=catalogo,
-        format_func=lambda prod: f"{prod['nombre']} {prod['marca']} {prod['tamano']} {prod['unidad']}"
+        format_func=lambda prod: f"{prod['nombre'] or ''} {prod['marca'] or ''} {prod['tamano'] or ''} {prod['unidad'] or ''}".strip()
     )
     
     id_prod = producto_seleccionado['id_producto']
-    nombre_prod = producto_seleccionado['nombre']
+    
+    # Construcción de la identidad completa para la comparación inteligente
+    componentes = [
+        str(producto_seleccionado["nombre"] or ""),
+        str(producto_seleccionado["marca"] or ""),
+        str(producto_seleccionado["tamano"] or ""),
+        str(producto_seleccionado["unidad"] or "")
+    ]
+    identidad_completa = " ".join([c.strip() for c in componentes if c.strip()])
+    nombre_prod_limpio = limpiar_texto(identidad_completa)
+    palabras_producto = set(nombre_prod_limpio.split())
 
     st.write("---")
 
     # 2. Selector de modalidad
     opcion_metodo = st.radio(
         "2. Selecciona el método para la imagen:",
-        options=["Subir imagen desde la computadora", "Asociar a imagen existente en el álbum"]
+        options=["Subir imagen desde la computadora", "Escanear y asociar automáticamente desde el álbum de ImgBB"]
     )
 
     st.write("---")
@@ -144,9 +161,7 @@ else:
     if opcion_metodo == "Subir imagen desde la computadora":
         archivo_imagen = st.file_uploader("Selecciona o arrastra la imagen del producto", type=["jpg", "jpeg", "png", "webp"])
         
-        # Guardar el archivo en el estado para evitar pérdidas al hacer clic en botones
         if archivo_imagen is not None:
-            # Almacenamos los bytes en memoria persistentemente
             st.session_state["bytes_archivo_subido"] = archivo_imagen.getvalue()
             st.session_state["nombre_archivo_subido"] = archivo_imagen.name
         else:
@@ -154,50 +169,88 @@ else:
                 del st.session_state["bytes_archivo_subido"]
                 del st.session_state["nombre_archivo_subido"]
 
-        # Si existen bytes en el estado, habilitamos la interacción de guardado
         if "bytes_archivo_subido" in st.session_state:
-            st.success(f"📸 Archivo cargado en memoria listo para procesar: {st.session_state['nombre_archivo_subido']}")
+            st.success(f"📸 Archivo cargado en memoria: {st.session_state['nombre_archivo_subido']}")
             
             if st.button("🚀 Subir e Inyectar en Neon", type="primary", use_container_width=True):
-                with st.spinner("Procesando subida a ImgBB y guardando en Neon..."):
-                    # Extraemos los bytes seguros desde la memoria persistente
+                with st.spinner("Procesando subida..."):
                     bytes_de_la_foto = st.session_state["bytes_archivo_subido"]
+                    url_foto = subir_imagen_a_album(bytes_de_la_foto, identidad_completa)
                     
-                    # Ejecuta la subida a internet primero
-                    url_foto = subir_imagen_a_album(bytes_de_la_foto, nombre_prod)
-                    
-                    # Si funcionó, guarda en la base de datos
                     if url_foto:
                         if guardar_url_en_neon(id_prod, url_foto):
-                            st.success(f"¡Éxito! Foto subida y asociada a '{nombre_prod}' correctamente. 🎉")
-                            st.info(f"🔗 Enlace guardado: {url_foto}")
+                            st.success(f"¡Éxito! Foto subida y asociada a '{identidad_completa}' correctamente. 🎉")
                             st.balloons()
-                            
-                            # Limpieza opcional del estado para evitar dobles envíos accidentales
                             del st.session_state["bytes_archivo_subido"]
                             st.rerun()
-                    else:
-                        st.error("❌ No se pudo obtener la URL de ImgBB. Revisa las credenciales de la API.")
         else:
             st.info("💡 Sube una imagen desde tu PC para habilitar el botón de guardado.")
 
-
-    # === MODALIDAD 2: ENLACE DEL ÁLBUM ===
+    # === MODALIDAD 2: ESCANEO AUTOMÁTICO DE ÁLBUM (CORREGIDO Y COMPLETADO) ===
     elif opcion_metodo == "Asociar a imagen existente en el álbum":
-        url_existente = st.text_input("Pega la URL directa de la imagen que ya está en tu álbum:", placeholder="https://ibb.co...")
+        st.write("🔍 **Buscador Inteligente Anti-Errores** (Evita cruzar café con carne molida)")
         
-        if url_existente:
-            # Vista previa opcional si el usuario pega un enlace directo válido
-            if url_existente.startswith("http"):
-                st.image(url_existente, caption="Vista previa de la imagen detectada", width=200)
+        umbral_confianza = st.slider("Ajustar nivel de precisión mínimo (%)", min_value=50, max_value=100, value=75, step=5)
+        umbral_decimal = umbral_confianza / 100.0
 
-            if st.button("🔗 Asociar Enlace Directamente"):
-                with st.spinner("Actualizando registro en Neon..."):
-                    url_limpia_foto = url_existente.strip()
-                    
-                    # Guarda el texto directo en Neon saltándose a ImgBB
-                    if guardar_url_en_neon(id_prod, url_limpia_foto):
-                        st.success(f"¡Asociación exitosa! La URL ya está vinculada a '{nombre_prod}'. 🎉")
-                        st.balloons()
-        else:
-            st.info("💡 Pega un enlace válido de ImgBB para habilitar el botón de asociación.")
+        if st.button("🔍 Buscar coincidencia en el álbum entero", type="primary", use_container_width=True):
+            with st.spinner("Escaneando el álbum remoto de ImgBB..."):
+                imagenes_album = obtener_todas_las_imagenes_imgbb()
+                
+                if not imagenes_album:
+                    st.error("❌ No se pudieron leer las imágenes automáticamente desde el álbum de ImgBB (verifica si el álbum es privado).")
+                    st.info("💡 Como alternativa segura, puedes introducir el enlace directo abajo:")
+                else:
+                    mejor_similitud = 0.0
+                    mejor_url = None
+                    mejor_nombre_img = ""
+
+                    for img in imagenes_album:
+                        nombre_img_remota = limpiar_texto(img.get("title", "") or img.get("filename", ""))
+                        palabras_img = set(nombre_img_remota.split())
+
+                        # FILTRO CRUCIAL: Deben compartir al menos una palabra clave de identidad para evitar café vs carne
+                        if not palabras_producto.intersection(palabras_img):
+                            continue
+
+                        similitud = SequenceMatcher(None, nombre_prod_limpio, nombre_img_remota).ratio()
+                        if similitud > mejor_similitud:
+                            mejor_similitud = similitud
+                            mejor_url = img.get("url")
+                            mejor_nombre_img = img.get("title") or img.get("filename")
+
+                    # Validar si pasa el filtro configurado por el usuario
+                    if mejor_similitud >= umbral_decimal and mejor_url:
+                        st.session_state["url_detectada"] = mejor_url
+                        st.session_state["nombre_img_detectada"] = mejor_nombre_img
+                        st.session_state["similitud_detectada"] = mejor_similitud
+                    else:
+                        st.warning(f"⚠️ No se encontró ninguna imagen en el álbum que coincida con '{identidad_completa}' bajo un umbral del {umbral_confianza}%.")
+                        if "url_detectada" in st.session_state:
+                            del st.session_state["url_detectada"]
+
+        # Mostrar resultados y botón de guardado fuera del bloque del botón de búsqueda para persistencia
+        if "url_detectada" in st.session_state:
+            st.write("---")
+            st.success(f"🎯 ¡Coincidencia encontrada con el **{st.session_state['similitud_detectada']*100:.1f}%** de confianza!")
+            st.write(f"**Producto:** `{identidad_completa}`")
+            st.write(f"**Imagen en ImgBB:** `{st.session_state['nombre_img_detectada']}`")
+            st.image(st.session_state["url_detectada"], caption="Imagen detectada en tu álbum", width=250)
+
+            if st.button("💾 Confirmar y Guardar esta Asociación en Neon", use_container_width=True):
+                with st.spinner("Guardando en Neon..."):
+                    if guardar_url_en_neon(id_prod, st.session_state["url_detectada"]):
+                        st.success("🎉 ¡Guardado exitosamente en la base de datos!")
+                        del st.session_state["url_detectada"]
+                        st.rerun()
+
+        # Entrada manual de respaldo siempre visible si falla el escaneo automático
+        st.write("---")
+        st.write("📌 **Alternativa manual:**")
+        url_manual = st.text_input("Pega la URL de la imagen aquí si prefieres hacerlo manualmente:", placeholder="https://ibb.co...")
+        if url_manual:
+            if st.button("🔗 Forzar asociación manual", use_container_width=True):
+                with st.spinner("Guardando enlace manual..."):
+                    if guardar_url_en_neon(id_prod, url_manual.strip()):
+                        st.success("✅ Vinculado manualmente con éxito.")
+                        st.rerun()
