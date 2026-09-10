@@ -471,3 +471,36 @@ if st.session_state.get("modo_edicion") and st.session_state.get("prod_id_edicio
                         uploaded_url = subir_imagen_storage(nueva_imagen)
                         if uploaded_url:
                             url_img_final = uploaded_url
+                    try:
+                        with conn.session as session:
+                            query = """
+                                UPDATE productos SET 
+                                    nombre = :nombre, id_cat = :id_cat, id_subcat = :id_subcat,
+                                    marca = :marca, codigo_barras = :codigo_barras, tamano = :tamano,
+                                    unidad = :unidad, es_favorito = :es_favorito, alta_demanda = :alta_demanda,
+                                    es_estrategico = :es_estrategico, cod_verif = :cod_verif, url_imagen = :url_imagen
+                                WHERE id_producto = :id_producto;
+                            """
+                            session.execute(query, {
+                                "nombre": edit_nombre.strip(),
+                                "id_cat": int(id_cat_db),
+                                "id_subcat": int(id_subcat_db),
+                                "marca": edit_marca.strip() if edit_marca.strip() else None,
+                                "codigo_barras": edit_codigo.strip() if edit_codigo.strip() else None,
+                                "tamano": edit_tamano,
+                                "unidad": edit_unidad,
+                                "es_favorito": edit_fav,
+                                "alta_demanda": edit_dem,
+                                "es_estrategico": edit_est,
+                                "cod_verif": edit_verif,
+                                "url_imagen": url_img_final if url_img_final else None,
+                                "id_producto": prod_id_edit
+                            })
+                            session.commit()
+                        st.success("✔️ Producto actualizado correctamente en Neon.")
+                        st.session_state["modo_edicion"] = False
+                        st.session_state["prod_id_edicion"] = None
+                        cargar_productos.clear()
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ Error al actualizar en Neon: {e}")
