@@ -442,7 +442,7 @@ if st.session_state.get("modo_edicion") and st.session_state.get("prod_id_edicio
 
             st.markdown("---")
             st.markdown("#### Imagen del Producto")
-            col_img_prev, col_img_up = st.columns([1, 2])
+            col_img_prev, col_img_up = st.columns(2)
             with col_img_prev:
                 if prod_url_imagen:
                     st.image(prod_url_imagen, width=120)
