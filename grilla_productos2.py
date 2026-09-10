@@ -508,7 +508,8 @@ if st.session_state.get("modo_edicion") and st.session_state.get("prod_id_edicio
                             st.success("✔️ Producto actualizado correctamente en Neon.")
                             st.session_state["modo_edicion"] = False
                             st.session_state["prod_id_edicion"] = None
-                            cargar_productos.clear()
+                            st.cache_data.clear() 
+                            # cargar_productos.clear()
                             st.rerun()
                         except Exception as e:
                             st.error(f"❌ Error al actualizar en Neon: {e}")
