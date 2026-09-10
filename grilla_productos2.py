@@ -459,48 +459,49 @@ if st.session_state.get("modo_edicion") and st.session_state.get("prod_id_edicio
             col_guardar, col_cancelar = st.columns(2)
             with col_guardar:
                 if st.button("Guardar Cambios en Neon", type="primary", use_container_width=True, key=f"inline_edit_save_{prod_id_edit}"):
+                    # VALIDACIÓN: En vez de un return, usamos una estructura IF/ELSE limpia
                     if edit_subcat == "- Sin subcategorías -":
                         st.error("❌ La categoría seleccionada no tiene subcategorías.")
-                        return
+                    else:
+                        id_cat_db = mapa_cat_nombre_a_id.get(edit_cat)
+                        id_subcat_db = mapa_subcat_nombre_a_id.get(edit_subcat)
 
-                    id_cat_db = mapa_cat_nombre_a_id.get(edit_cat)
-                    id_subcat_db = mapa_subcat_nombre_a_id.get(edit_subcat)
-
-                    url_img_final = prod_url_imagen
-                    if cambiar_img and nueva_imagen is not None:
-                        uploaded_url = subir_imagen_storage(nueva_imagen)
-                        if uploaded_url:
-                            url_img_final = uploaded_url
-                    try:
-                        with conn.session as session:
-                            query = """
-                                UPDATE productos SET 
-                                    nombre = :nombre, id_cat = :id_cat, id_subcat = :id_subcat,
-                                    marca = :marca, codigo_barras = :codigo_barras, tamano = :tamano,
-                                    unidad = :unidad, es_favorito = :es_favorito, alta_demanda = :alta_demanda,
-                                    es_estrategico = :es_estrategico, cod_verif = :cod_verif, url_imagen = :url_imagen
-                                WHERE id_producto = :id_producto;
-                            """
-                            session.execute(query, {
-                                "nombre": edit_nombre.strip(),
-                                "id_cat": int(id_cat_db),
-                                "id_subcat": int(id_subcat_db),
-                                "marca": edit_marca.strip() if edit_marca.strip() else None,
-                                "codigo_barras": edit_codigo.strip() if edit_codigo.strip() else None,
-                                "tamano": edit_tamano,
-                                "unidad": edit_unidad,
-                                "es_favorito": edit_fav,
-                                "alta_demanda": edit_dem,
-                                "es_estrategico": edit_est,
-                                "cod_verif": edit_verif,
-                                "url_imagen": url_img_final if url_img_final else None,
-                                "id_producto": prod_id_edit
-                            })
-                            session.commit()
-                        st.success("✔️ Producto actualizado correctamente en Neon.")
-                        st.session_state["modo_edicion"] = False
-                        st.session_state["prod_id_edicion"] = None
-                        cargar_productos.clear()
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"❌ Error al actualizar en Neon: {e}")
+                        url_img_final = prod_url_imagen
+                        if cambiar_img and nueva_imagen is not None:
+                            uploaded_url = subir_imagen_storage(nueva_imagen)
+                            if uploaded_url:
+                                url_img_final = uploaded_url
+                                
+                        try:
+                            with conn.session as session:
+                                query = """
+                                    UPDATE productos SET 
+                                        nombre = :nombre, id_cat = :id_cat, id_subcat = :id_subcat,
+                                        marca = :marca, codigo_barras = :codigo_barras, tamano = :tamano,
+                                        unidad = :unidad, es_favorito = :es_favorito, alta_demanda = :alta_demanda,
+                                        es_estrategico = :es_estrategico, cod_verif = :cod_verif, url_imagen = :url_imagen
+                                    WHERE id_producto = :id_producto;
+                                """
+                                session.execute(query, {
+                                    "nombre": edit_nombre.strip(),
+                                    "id_cat": int(id_cat_db) if id_cat_db is not None else None,
+                                    "id_subcat": int(id_subcat_db) if id_subcat_db is not None else None,
+                                    "marca": edit_marca.strip() if edit_marca.strip() else None,
+                                    "codigo_barras": edit_codigo.strip() if edit_codigo.strip() else None,
+                                    "tamano": edit_tamano,
+                                    "unidad": edit_unidad,
+                                    "es_favorito": edit_fav,
+                                    "alta_demanda": edit_dem,
+                                    "es_estrategico": edit_est,
+                                    "cod_verif": edit_verif,
+                                    "url_imagen": url_img_final if url_img_final else None,
+                                    "id_producto": prod_id_edit
+                                })
+                                session.commit()
+                            st.success("✔️ Producto actualizado correctamente en Neon.")
+                            st.session_state["modo_edicion"] = False
+                            st.session_state["prod_id_edicion"] = None
+                            cargar_productos.clear()
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ Error al actualizar en Neon: {e}")
