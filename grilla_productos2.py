@@ -1,5 +1,5 @@
 # ==============================================================================
-# PARTE 1: CONFIGURACIÓN, CONEXIÓN A NEON Y NORMALIZADORES
+# PARTE 1: CONFIGURACIÓN, LLAVES DE SEGURIDAD Y CONEXIÓN A NEON
 # VERSIÓN: 2.0 - MIGRADO A NEON & IMGBB
 # ==============================================================================
 
@@ -10,13 +10,13 @@ import requests
 import time
 from datetime import datetime
 
-# CONSTANTES DE VERSIÓN Y CONFIGURACIÓN
+# CONSTANTES DE VERSIÓN Y CONFIGURACIÓN CORPORATIVA
 VERSION_PROGRAMA = "2.0-Neon"
 UNIDADES = ["gr", "kg", "ml", "lt", "unidad"]
-NOMBRE_PROGRAMA = "Grilla de Productos (Neon)"
-IMGBB_API_URL = "https://api.imgbb.com/1/upload"
+NOMBRE_PROGRAMA = "Grilla de Productos"
+IMGBB_API_URL = "https://imgbb.com"
 
-# 1. CONFIGURACIÓN CORPORATIVA DE LA VENTANA DE STREAMLIT
+# 1. CONFIGURACIÓN DE LA VENTANA DE STREAMLIT
 st.set_page_config(
     page_title=f"{NOMBRE_PROGRAMA} v{VERSION_PROGRAMA}",
     page_icon="📦",
@@ -24,29 +24,38 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 2. CONEXIÓN SEGURA CON NEON POSTGRESQL (Nativo de Streamlit)
+# 2. CARGAR SECRETOS DE FORMA SEGURA DESDE STREAMLIT CLOUD
+try:
+    url_limpia = st.secrets["neon"]["url"]
+    IMGBB_API_KEY = st.secrets["imgbb"]["api_key"]
+    IMGBB_ALBUM_ID = st.secrets["imgbb"]["album_id"]
+except KeyError as e:
+    st.error(f"❌ Error: Falta configurar la variable {e} en los Secrets de Streamlit.")
+    st.stop()
+
+# 3. CONEXIÓN SEGURA CON NEON POSTGRESQL (Nativo de Streamlit utilizando url_limpia)
 @st.cache_resource
-def init_neon_connection():
+def init_neon_connection(connection_url: str):
     try:
-        # Usa el conector SQL nativo integrado de Streamlit
-        conn = st.connection("neon_db", type="sql")
+        # Crea la conexión utilizando la URL extraída de tus secretos
+        conn = st.connection("neon_db", type="sql", url=connection_url)
         return conn
     except Exception as e:
-        st.error(f"❌ Error de Conexión a Neon: {e}")
+        st.error(f"❌ Error de Conexión Base a Neon: {e}")
         st.stop()
 
-conn = init_neon_connection()
+conn = init_neon_connection(url_limpia)
 
-# Inicializar estado de edición inline
+# 4. INICIALIZAR ESTADO DE EDICIÓN INLINE
 if "modo_edicion" not in st.session_state:
     st.session_state["modo_edicion"] = False
 if "prod_id_edicion" not in st.session_state:
     st.session_state["prod_id_edicion"] = None
 
-st.title(f"🚀 {NOMBRE_PROGRAMA}")
-st.markdown(f"**Versión {VERSION_PROGRAMA}** — Operando sobre Postgres en Neon & ImgBB.")
+st.title(f"📦 {NOMBRE_PROGRAMA}")
+st.markdown(f"**Versión {VERSION_PROGRAMA}** — Edición inline + acciones en modal operando en Neon.")
 
-# FUNCIÓN AUXILIAR: Normalizar valores pandas
+# 5. FUNCIÓN AUXILIAR: Normalizar valores de Pandas / SQL (evita errores de compilación por NaN o None)
 def safe_str(val, default=""):
     if val is None or (isinstance(val, float) and np.isnan(val)):
         return default
@@ -64,6 +73,7 @@ def safe_bool(val, default=False):
     if val is None or (isinstance(val, float) and np.isnan(val)):
         return default
     return bool(val)
+
 # ==============================================================================
 # PARTE 2: CONTROLADORES DE DATOS (SQL) Y SUBIDA A IMGBB
 # ==============================================================================
