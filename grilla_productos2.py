@@ -330,3 +330,48 @@ with f3:
         opciones_subcat = ["Todas"] + (sorted(df_subcategorias["nombre"].dropna().unique().tolist()) if not df_subcategorias.empty else [])
     filtro_subcat = st.selectbox("Subcategoría:", opciones_subcat, label_visibility="collapsed")
 
+# 8. APLICACIÓN DE FILTROS
+mask = pd.Series([True] * len(df))
+if busqueda:
+    busqueda_lower = busqueda.lower()
+    mask_nombre = df["nombre"].fillna("").str.lower().str.contains(busqueda_lower, na=False)
+    mask_marca = df["marca"].fillna("").str.lower().str.contains(busqueda_lower, na=False)
+    mask_codigo = df["codigo_barras"].fillna("").str.lower().str.contains(busqueda_lower, na=False)
+    mask &= (mask_nombre | mask_marca | mask_codigo)
+if filtro_cat != "Todas" and "nombre_cat" in df.columns:
+    mask &= (df["nombre_cat"] == filtro_cat)
+if filtro_subcat != "Todas" and "nombre_subcat" in df.columns:
+    mask &= (df["nombre_subcat"] == filtro_subcat)
+
+df_filtrado = df[mask].copy()
+
+# 10. PANEL DE ACCIONES UNIFICADO
+if df_filtrado.empty:
+    st.info("💡 No hay productos que coincidan con los filtros seleccionados.")
+    prod_sel = None
+else:
+    listado_filtrado = df_filtrado.to_dict("records")
+    def formateador_desambiguado(x):
+        marca_lbl = x.get('marca') or 'Sin Marca'
+        tamano_lbl = float(x.get('tamano')) if x.get('tamano') else 0.0
+        unidad_lbl = x.get('unidad') or ''
+        sku_lbl = x.get('codigo_barras') or 'SIN SKU'
+        return f"{x['nombre']} | {marca_lbl} ({tamano_lbl} {unidad_lbl}) [{sku_lbl}]"
+
+    with st.container(border=True):
+        prod_sel = st.selectbox("Seleccione la presentación exacta para ejecutar acciones:", listado_filtrado, format_func=formateador_desambiguado, index=None, placeholder="🔍 Elige un producto para acciones...", key="m_sel")
+
+    if prod_sel is not None:
+        col_btn1, col_btn2, col_btn3 = st.columns(3)
+        with col_btn1:
+            if st.button("📝 Modificar", type="primary", use_container_width=True, key="btn_modificar_v2"):
+                st.session_state["modo_edicion"] = True
+                st.session_state["prod_id_edicion"] = int(prod_sel["id_producto"])
+                st.rerun()
+        with col_btn2:
+            if st.button("📋 Duplicar", use_container_width=True, key="btn_duplicar_v2"):
+                dialog_duplicar_producto(prod_sel, df_categorias, df_subcategorias, mapa_cat_nombre_a_id, mapa_subcat_nombre_a_id)
+        with col_btn3:
+            if st.button("🗑️ Eliminar", use_container_width=True, key="btn_eliminar_v2"):
+                dialog_eliminar_producto(prod_sel)
+
