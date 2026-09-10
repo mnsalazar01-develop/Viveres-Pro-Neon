@@ -408,7 +408,7 @@ if st.session_state.get("modo_edicion") and st.session_state.get("prod_id_edicio
                 edit_cat = st.selectbox("Categoría:", lista_categorias, index=lista_categorias.index(prod_cat) if prod_cat in lista_categorias else 0, key=f"inline_edit_cat_{prod_id_edit}")
             with col_subcat:
                 id_cat_sel = mapa_cat_nombre_a_id.get(edit_cat)
-                subcats_disp = []
+                subcats_disp = [0]
                 if id_cat_sel is not None and not df_subcategorias.empty:
                     subcats_disp = sorted(df_subcategorias[df_subcategorias["id_cat"] == id_cat_sel]["nombre"].dropna().unique().tolist())
                 idx_sub = subcats_disp.index(prod_subcat) if prod_subcat in subcats_disp else 0
