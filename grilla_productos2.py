@@ -564,3 +564,93 @@ st.dataframe(
     },
     hide_index=True
 )
+
+# ==============================================================================
+# 9. CREAR NUEVO PRODUCTO
+# ==============================================================================
+with st.expander("➕ Crear Nuevo Producto en Neon", expanded=False):
+    col_cat_crear, col_subcat_crear = st.columns(2)
+    with col_cat_crear:
+        nueva_cat_crear = st.selectbox("Categoría:", lista_categorias, index=0, key="sel_cat_crear")
+    with col_subcat_crear:
+        id_cat_crear = mapa_cat_nombre_a_id.get(nueva_cat_crear)
+        subcats_crear = []
+        if id_cat_crear is not None and not df_subcategorias.empty:
+            subcats_crear = sorted(df_subcategorias[df_subcategorias["id_cat"] == id_cat_crear]["nombre"].dropna().unique().tolist())
+        if not subcats_crear:
+            st.warning(f"⚠️ La categoría '{nueva_cat_crear}' no tiene subcategorías.")
+        nueva_subcat_crear = st.selectbox("Subcategoría:", subcats_crear if subcats_crear else ["- Sin subcategorías -"], disabled=not subcats_crear, key="sel_subcat_crear")
+
+    with st.form("form_crear_producto", clear_on_submit=True):
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            new_nombre = st.text_input("Nombre del Producto *", placeholder="Ej: Leche Entera 1L")
+        with col2:
+            new_marca = st.text_input("Marca", placeholder="Ej: Colun")
+        with col3:
+            new_codigo = st.text_input("Código de Barras", placeholder="Ej: 7800000001")
+
+        col4, col5 = st.columns(2)
+        with col4:
+            new_tamano = st.number_input("Tamaño:", min_value=0.0, step=0.01, value=0.0)
+        with col5:
+            new_unidad = st.selectbox("Unidad de medida:", UNIDADES, index=0, key="sel_unidad_crear")
+
+        col6, col7, col8, col9 = st.columns(4)
+        with col6:
+            new_fav = st.checkbox("⭐ Favorito", value=False)
+        with col7:
+            new_dem = st.checkbox("🔥 Alta Demanda", value=False)
+        with col8:
+            new_est = st.checkbox("🎯 Estratégico", value=False)
+        with col9:
+            new_verif = st.checkbox("✔ Cod. Verif.", value=False)
+
+        col_img_up, col_img_prev = st.columns([2, 1])
+        with col_img_up:
+            archivo_imagen = st.file_uploader("📷 Subir imagen del producto a ImgBB:", type=["png", "jpg", "jpeg", "webp", "gif"])
+        with col_img_prev:
+            if archivo_imagen is not None:
+                st.image(archivo_imagen, caption="Vista previa", width=150)
+
+        btn_crear = st.form_submit_button("💾 Guardar Nuevo Producto en Neon", type="primary", use_container_width=True)
+
+        if btn_crear:
+            if not new_nombre.strip():
+                st.error("❌ El nombre del producto es obligatorio.")
+            elif nueva_subcat_crear == "- Sin subcategorías -":
+                st.error("❌ Debe seleccionar una subcategoría válida.")
+            else:
+                id_subcat_crear = mapa_subcat_nombre_a_id.get(nueva_subcat_crear)
+                id_cat_crear_db = mapa_cat_nombre_a_id.get(nueva_cat_crear)
+
+                url_imagen_completa = None
+                if archivo_imagen is not None:
+                    url_imagen_completa = subir_imagen_storage(archivo_imagen)
+
+                try:
+                    with conn.session as session:
+                        query = """
+                        INSERT INTO productos (nombre, id_cat, id_subcat, marca, codigo_barras, tamano, unidad, es_favorito, alta_demanda, es_estrategico, cod_verif, url_imagen)
+                        VALUES (:nombre, :id_cat, :id_subcat, :marca, :codigo_barras, :tamano, :unidad, :es_favorito, :alta_demanda, :es_estrategico, :cod_verif, :url_imagen);
+                        """
+                        session.execute(query, {
+                            "nombre": new_nombre.strip(),
+                            "id_cat": int(id_cat_crear_db),
+                            "id_subcat": int(id_subcat_crear),
+                            "marca": new_marca.strip() if new_marca.strip() else None,
+                            "codigo_barras": new_codigo.strip() if new_codigo.strip() else None,
+                            "tamano": new_tamano if new_tamano > 0 else None,
+                            "unidad": new_unidad.strip() if new_unidad.strip() else None,
+                            "es_favorito": new_fav,
+                            "alta_demanda": new_dem,
+                            "es_estrategico": new_est,
+                            "cod_verif": new_verif,
+                            "url_imagen": url_imagen_completa if url_imagen_completa else None
+                        })
+                        session.commit()
+                    st.success(f"🎉 Producto '{new_nombre}' creado exitosamente en Neon.")
+                    cargar_productos.clear()
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ Error al crear producto en Neon: {e}")
