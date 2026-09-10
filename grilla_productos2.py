@@ -517,3 +517,50 @@ if st.session_state.get("modo_edicion") and st.session_state.get("prod_id_edicio
                     st.session_state["modo_edicion"] = False
                     st.session_state["prod_id_edicion"] = None
                     st.rerun()
+
+# 10.2 GRILLA VISUAL DE STREAMLIT
+st.markdown(f"### 📋 Catálogo — {len(df_filtrado)} registros")
+
+columnas_display = [
+    "url_imagen", "id_producto", "nombre", "marca",
+    "tamano", "unidad", "nombre_cat", "nombre_subcat",
+    "es_favorito", "alta_demanda", "es_estrategico", "cod_verif"
+]
+columnas_existentes = [c for c in columnas_display if c in df_filtrado.columns]
+df_display = df_filtrado[columnas_existentes].copy()
+
+renombres = {
+    "url_imagen": "Imagen",
+    "id_producto": "ID",
+    "nombre": "Nombre del Producto",
+    "marca": "Marca",
+    "tamano": "Tamaño",
+    "unidad": "Unidad",
+    "nombre_cat": "Categoría",
+    "nombre_subcat": "Subcategoría",
+    "es_favorito": "⭐ Fav",
+    "alta_demanda": "🔥 Dem",
+    "es_estrategico": "🎯 Est",
+    "cod_verif": "✔ Verif",
+}
+df_display.rename(columns=renombres, inplace=True)
+
+if "ID" in df_display.columns:
+    df_display = df_display.sort_values(by="ID", ascending=True).reset_index(drop=True)
+
+st.dataframe(
+    df_display,
+    use_container_width=True,
+    height=400,
+    column_config={
+        "Imagen": st.column_config.ImageColumn("Imagen", help="Vista previa desde URL pública de ImgBB", width="small"),
+        "ID": st.column_config.NumberColumn("ID", width="small"),
+        "Marca": st.column_config.TextColumn("Marca", width="small"),
+        "Nombre del Producto": st.column_config.TextColumn("Nombre del Producto", width="medium"),
+        "Tamaño": st.column_config.NumberColumn("Tamaño", format="%.2f", width="small"),
+        "Unidad": st.column_config.TextColumn("Unidad", width="small"),
+        "Categoría": st.column_config.TextColumn("Categoría", width="small"),
+        "Subcategoría": st.column_config.TextColumn("Subcategoría", width="small"),
+    },
+    hide_index=True
+)
