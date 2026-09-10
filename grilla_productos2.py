@@ -37,8 +37,14 @@ except KeyError as e:
 @st.cache_resource
 def init_neon_connection(connection_url: str):
     try:
-        # Crea la conexión utilizando la URL extraída de tus secretos
-        conn = st.connection("neon_db", type="sql", url=connection_url)
+        # Crea la conexión inyectando los parámetros del pool directo a SQLAlchemy
+        conn = st.connection(
+            "neon_db", 
+            type="sql", 
+            url=connection_url,
+            pool_pre_ping=True,  # 👈 Verifica si Neon cerró el SSL antes de hacer queries
+            pool_recycle=300     # 👈 Recicla conexiones viejas cada 5 minutos
+        )
         return conn
     except Exception as e:
         st.error(f"❌ Error de Conexión Base a Neon: {e}")
@@ -505,3 +511,9 @@ if st.session_state.get("modo_edicion") and st.session_state.get("prod_id_edicio
                             st.rerun()
                         except Exception as e:
                             st.error(f"❌ Error al actualizar en Neon: {e}")
+
+            with col_cancelar:
+                if st.button("❌ Cancelar", use_container_width=True, key=f"inline_edit_cancel_{prod_id_edit}"):
+                    st.session_state["modo_edicion"] = False
+                    st.session_state["prod_id_edicion"] = None
+                    st.rerun()
