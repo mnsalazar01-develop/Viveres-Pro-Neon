@@ -443,5 +443,16 @@ if st.session_state.get("modo_edicion") and st.session_state.get("prod_id_edicio
             st.markdown("---")
             st.markdown("#### Imagen del Producto")
 
+            col_img_prev, col_img_up = st.columns([1, 2])
+            with col_img_prev:
+                if prod_url_imagen:
+                    st.image(prod_url_imagen, width=120)
+                else:
+                    st.markdown("*Sin imagen*")
+            with col_img_up:
+                cambiar_img = st.checkbox("Cambiar imagen (Sube directo a ImgBB)", value=False, key=f"inline_edit_chgimg_{prod_id_edit}")
+                nueva_imagen = None
+                if cambiar_img:
+                    nueva_imagen = st.file_uploader("Subir nueva imagen:", type=["png", "jpg", "jpeg", "webp", "gif"], key=f"inline_edit_img_{prod_id_edit}")
 
 
