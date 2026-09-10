@@ -375,3 +375,191 @@ else:
             if st.button("🗑️ Eliminar", use_container_width=True, key="btn_eliminar_v2"):
                 dialog_eliminar_producto(prod_sel)
 
+# ==============================================================================
+# PARTE 5: FORMULARIO DE EDICIÓN, GRILLA PRINCIPAL Y CREADOR
+# ==============================================================================
+
+# 10.1 FORMULARIO DE EDICIÓN INLINE (Acoplado a Neon)
+if st.session_state.get("modo_edicion") and st.session_state.get("prod_id_edicion"):
+    prod_id_edit = st.session_state["prod_id_edicion"]
+    prod_edit = next((p for p in listado_filtrado if int(p["id_producto"]) == prod_id_edit), None)
+
+    if prod_edit is not None:
+        st.markdown("---")
+        st.markdown("### 📝 Editar Producto en Neon")
+        with st.container(border=True):
+            prod_nombre = safe_str(prod_edit.get("nombre"), "")
+            prod_marca = safe_str(prod_edit.get("marca"), "")
+            prod_codigo = safe_str(prod_edit.get("codigo_barras"), "")
+            prod_tamano = safe_float(prod_edit.get("tamano"), 0.0)
+            prod_unidad = safe_str(prod_edit.get("unidad"), "")
+            prod_fav = safe_bool(prod_edit.get("es_favorito"), False)
+            prod_dem = safe_bool(prod_edit.get("alta_demanda"), False)
+            prod_est = safe_bool(prod_edit.get("es_estrategico"), False)
+            prod_verif = safe_bool(prod_edit.get("cod_verif"), False)
+            prod_cat = safe_str(prod_edit.get("nombre_cat"), "")
+            prod_subcat = safe_str(prod_edit.get("nombre_subcat"), "")
+            prod_url_imagen = safe_str(prod_edit.get("url_imagen"), "")
+
+            st.markdown(f"**Editando:** {prod_nombre} (ID `{prod_id_edit}`)")
+
+            col_cat, col_subcat = st.columns(2)
+            with col_cat:
+                edit_cat = st.selectbox("Categoría:", lista_categorias, index=lista_categorias.index(prod_cat) if prod_cat in lista_categorias else 0, key=f"inline_edit_cat_{prod_id_edit}")
+            with col_subcat:
+                id_cat_sel = mapa_cat_nombre_a_id.get(edit_cat)
+                subcats_disp = []
+                if id_cat_sel is not None and not df_subcategorias.empty:
+                    subcats_disp = sorted(df_subcategorias[df_subcategorias["id_cat"] == id_cat_sel]["nombre"].dropna().unique().tolist())
+                idx_sub = subcats_disp.index(prod_subcat) if prod_subcat in subcats_disp else 0
+                edit_subcat = st.selectbox("Subcategoría:", subcats_disp if subcats_disp else ["- Sin subcategorías -"], index=idx_sub if subcats_disp else 0, disabled=not subcats_disp, key=f"inline_edit_subcat_{prod_id_edit}")
+
+            st.markdown("---")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                edit_nombre = st.text_input("Nombre:", value=prod_nombre, key=f"inline_edit_nom_{prod_id_edit}")
+            with col2:
+                edit_marca = st.text_input("Marca:", value=prod_marca, key=f"inline_edit_mar_{prod_id_edit}")
+            with col3:
+                edit_codigo = st.text_input("Código de Barras:", value=prod_codigo, key=f"inline_edit_cod_{prod_id_edit}")
+
+            col4, col5 = st.columns(2)
+            with col4:
+                edit_tamano = st.number_input("Tamaño:", value=prod_tamano, step=0.01, key=f"inline_edit_tam_{prod_id_edit}")
+            with col5:
+                idx_unidad = UNIDADES.index(prod_unidad) if prod_unidad in UNIDADES else 0
+                edit_unidad = st.selectbox("Unidad de medida:", UNIDADES, index=idx_unidad, key=f"inline_edit_uni_{prod_id_edit}")
+
+            col6, col7, col8, col9 = st.columns(4)
+            with col6:
+                edit_fav = st.checkbox("⭐ Favorito", value=prod_fav, key=f"inline_edit_fav_{prod_id_edit}")
+            with col7:
+                edit_dem = st.checkbox("🔥 Alta Demanda", value=prod_dem, key=f"inline_edit_dem_{prod_id_edit}")
+            with col8:
+                edit_est = st.checkbox("🎯 Estratégico", value=prod_est, key=f"inline_edit_est_{prod_id_edit}")
+            with col9:
+                edit_verif = st.checkbox("✔ Cod. Verif.", value=prod_verif, key=f"inline_edit_ver_{prod_id_edit}")
+
+            st.markdown("---")
+            st.markdown("#### Imagen del Producto")
+            col_img_prev, col_img_up = st.columns([1, 2])
+            with col_img_prev:
+                if prod_url_imagen:
+                    st.image(prod_url_imagen, width=120)
+                else:
+                    st.markdown("*Sin imagen*")
+            with col_img_up:
+                cambiar_img = st.checkbox("Cambiar imagen (Sube directo a ImgBB)", value=False, key=f"inline_edit_chgimg_{prod_id_edit}")
+                nueva_imagen = None
+                if cambiar_img:
+                    nueva_imagen = st.file_uploader("Subir nueva imagen:", type=["png", "jpg", "jpeg", "webp", "gif"], key=f"inline_edit_img_{prod_id_edit}")
+
+            st.markdown("---")
+            col_guardar, col_cancelar = st.columns(2)
+            with col_guardar:
+                if st.button("Guardar Cambios en Neon", type="primary", use_container_width=True, key=f"inline_edit_save_{prod_id_edit}"):
+                    if edit_subcat == "- Sin subcategorías -":
+                        st.error("❌ La categoría seleccionada no tiene subcategorías.")
+                        return
+
+                    id_cat_db = mapa_cat_nombre_a_id.get(edit_cat)
+                    id_subcat_db = mapa_subcat_nombre_a_id.get(edit_subcat)
+
+                    url_img_final = prod_url_imagen
+                    if cambiar_img and nueva_imagen is not None:
+                        uploaded_url = subir_imagen_storage(nueva_imagen)
+                        if uploaded_url:
+                            url_img_final = uploaded_url
+
+                    try:
+                        with conn.session as session:
+                            query = """
+                                UPDATE productos SET 
+                                    nombre = :nombre, id_cat = :id_cat, id_subcat = :id_subcat,
+                                    marca = :marca, codigo_barras = :codigo_barras, tamano = :tamano,
+                                    unidad = :unidad, es_favorito = :es_favorito, alta_demanda = :alta_demanda,
+                                    es_estrategico = :es_estrategico, cod_verif = :cod_verif, url_imagen = :url_imagen
+                                WHERE id_producto = :id_producto;
+                            """
+                            session.execute(query, {
+                                "nombre": edit_nombre.strip(),
+                                "id_cat": int(id_cat_db),
+                                "id_subcat": int(id_subcat_db),
+                                "marca": edit_marca.strip() if edit_marca.strip() else None,
+                                "codigo_barras": edit_codigo.strip() if edit_codigo.strip() else None,
+                                "tamano": edit_tamano,
+                                "unidad": edit_unidad,
+                                "es_favorito": edit_fav,
+                                "alta_demanda": edit_dem,
+                                "es_estrategico": edit_est,
+                                "cod_verif": edit_verif,
+                                "url_imagen": url_img_final if url_img_final else None,
+                                "id_producto": prod_id_edit
+                            })
+                            session.commit()
+                        st.success("✔️ Producto actualizado correctamente en Neon.")
+                        st.session_state["modo_edicion"] = False
+                        st.session_state["prod_id_edicion"] = None
+                        cargar_productos.clear()
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ Error al actualizar en Neon: {e}")
+
+            with col_cancelar:
+                if st.button("❌ Cancelar", use_container_width=True, key=f"inline_edit_cancel_{prod_id_edit}"):
+                    st.session_state["modo_edicion"] = False
+                    st.session_state["prod_id_edicion"] = None
+                    st.rerun()
+
+# 10.2 GRILLA VISUAL DE STREAMLIT
+st.markdown(f"### 📋 Catálogo — {len(df_filtrado)} registros")
+
+columnas_display = [
+    "url_imagen", "id_producto", "nombre", "marca",
+    "tamano", "unidad", "nombre_cat", "nombre_subcat",
+    "es_favorito", "alta_demanda", "es_estrategico", "cod_verif"
+]
+columnas_existentes = [c for c in columnas_display if c in df_filtrado.columns]
+df_display = df_filtrado[columnas_existentes].copy()
+
+renombres = {
+    "url_imagen": "Imagen",
+    "id_producto": "ID",
+    "nombre": "Nombre del Producto",
+    "marca": "Marca",
+    "tamano": "Tamaño",
+    "unidad": "Unidad",
+    "nombre_cat": "Categoría",
+    "nombre_subcat": "Subcategoría",
+    "es_favorito": "⭐ Fav",
+    "alta_demanda": "🔥 Dem",
+    "es_estrategico": "🎯 Est",
+    "cod_verif": "✔ Verif",
+}
+df_display.rename(columns=renombres, inplace=True)
+
+if "ID" in df_display.columns:
+    df_display = df_display.sort_values(by="ID", ascending=True).reset_index(drop=True)
+
+st.dataframe(
+    df_display,
+    use_container_width=True,
+    height=400,
+    column_config={
+        "Imagen": st.column_config.ImageColumn("Imagen", help="Vista previa desde URL pública de ImgBB", width="small"),
+        "ID": st.column_config.NumberColumn("ID", width="small"),
+        "Marca": st.column_config.TextColumn("Marca", width="small"),
+        "Nombre del Producto": st.column_config.TextColumn("Nombre del Producto", width="medium"),
+        "Tamaño": st.column_config.NumberColumn("Tamaño", format="%.2f", width="small"),
+        "Unidad": st.column_config.TextColumn("Unidad", width="small"),
+        "Categoría": st.column_config.TextColumn("Categoría", width="small"),
+        "Subcategoría": st.column_config.TextColumn("Subcategoría", width="small"),
+    },
+    hide_index=True
+)
+
+# 9. CREAR NUEVO PRODUCTO
+with st.expander("➕ Crear Nuevo Producto en Neon", expanded=False):
+    col_cat_crear, col_subcat_crear = st.columns(2)
+    with col_cat_crear:
+
