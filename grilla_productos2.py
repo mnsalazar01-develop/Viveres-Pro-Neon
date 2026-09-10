@@ -431,42 +431,6 @@ if st.session_state.get("modo_edicion") and st.session_state.get("prod_id_edicio
 
             st.markdown("---")
             st.markdown("#### Imagen del Producto")
-            col_img_prev, col_img_up = st.columns(2)
-            with col_img_prev:
-                if prod_url_imagen:
-                    st.image(prod_url_imagen, width=120)
-                else:
-                    st.markdown("*Sin imagen*")
-            with col_img_up:
-                cambiar_img = st.checkbox("Cambiar imagen (Sube directo a ImgBB)", value=False, key=f"inline_edit_chgimg_{prod_id_edit}")
-                nueva_imagen = None
-                if cambiar_img:
-                    nueva_imagen = st.file_uploader("Subir nueva imagen:", type=["png", "jpg", "jpeg", "webp", "gif"], key=f"inline_edit_img_{prod_id_edit}")
-
-            st.markdown("---")
-            col_guardar, col_cancelar = st.columns(2)
-            with col_guardar:
-                if st.button("Guardar Cambios en Neon", type="primary", use_container_width=True, key=f"inline_edit_save_{prod_id_edit}"):
-                    if edit_subcat == "- Sin subcategorías -":
-                        st.error("❌ La categoría seleccionada no tiene subcategorías.")
-                        return
-
-                    id_cat_db = mapa_cat_nombre_a_id.get(edit_cat)
-                    id_subcat_db = mapa_subcat_nombre_a_id.get(edit_subcat)
-
-                    url_img_final = prod_url_imagen
-                    if cambiar_img and nueva_imagen is not None:
-                        uploaded_url = subir_imagen_storage(nueva_imagen)
-                        if uploaded_url:
-                            url_img_final = uploaded_url
-
-
-            with col_cancelar:
-                if st.button("❌ Cancelar", use_container_width=True, key=f"inline_edit_cancel_{prod_id_edit}"):
-                    st.session_state["modo_edicion"] = False
-                    st.session_state["prod_id_edicion"] = None
-                    st.rerun()
-
 
 
 
