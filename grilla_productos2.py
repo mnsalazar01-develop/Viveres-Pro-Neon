@@ -558,8 +558,4 @@ st.dataframe(
     hide_index=True
 )
 
-# 9. CREAR NUEVO PRODUCTO
-with st.expander("➕ Crear Nuevo Producto en Neon", expanded=False):
-    col_cat_crear, col_subcat_crear = st.columns(2)
-    with col_cat_crear:
 
