@@ -14,7 +14,7 @@ from datetime import datetime
 VERSION_PROGRAMA = "2.0-Neon"
 UNIDADES = ["gr", "kg", "ml", "lt", "unidad"]
 NOMBRE_PROGRAMA = "Grilla de Productos"
-IMGBB_API_URL = "https://imgbb.com"
+IMGBB_API_URL = "https://api.imgbb.com/1/upload"
 
 # 1. CONFIGURACIÓN DE LA VENTANA DE STREAMLIT
 st.set_page_config(
