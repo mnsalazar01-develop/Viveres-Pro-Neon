@@ -9,6 +9,7 @@ import numpy as np
 import requests
 import time
 from datetime import datetime
+from sqlalchemy import text
 
 # CONSTANTES DE VERSIÓN Y CONFIGURACIÓN CORPORATIVA
 VERSION_PROGRAMA = "2.0-Neon"
@@ -477,7 +478,6 @@ if st.session_state.get("modo_edicion") and st.session_state.get("prod_id_edicio
                             uploaded_url = subir_imagen_storage(nueva_imagen)
                             if uploaded_url:
                                 url_img_final = uploaded_url
-                                
                         try:
                             with conn.session as session:
                                 query = """
@@ -488,7 +488,8 @@ if st.session_state.get("modo_edicion") and st.session_state.get("prod_id_edicio
                                         es_estrategico = :es_estrategico, cod_verif = :cod_verif, url_imagen = :url_imagen
                                     WHERE id_producto = :id_producto;
                                 """
-                                session.execute(query, {
+                                # 👇 ENVOLVEMOS LA CONSULTA CON text(query) 👇
+                                session.execute(text(query), {
                                     "nombre": edit_nombre.strip(),
                                     "id_cat": int(id_cat_db) if id_cat_db is not None else None,
                                     "id_subcat": int(id_subcat_db) if id_subcat_db is not None else None,
