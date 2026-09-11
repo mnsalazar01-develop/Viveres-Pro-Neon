@@ -268,58 +268,52 @@ with metric_col4: st.metric(label="✅ Incluidos en Campaña Activa", value=st.s
 # PROGRAMA: registro_ofertas_mosaico_fiel.py | PARTE 4 DE 5
 # MODULO: FUNCIÓN DE REJILLA VERTICAL (COMPATIBLE CON STRING TEXT IDs)
 # =====================================================================
+# =====================================================================
+# PROGRAMA: registro_ofertas_mosaico_fiel.py | PARTE 5 DE 5
+# MODULO: INTERFAZ DINÁMICA DE PASILLOS Y PERSISTENCIA CORPORATIVA (UPSERT)
+# =====================================================================
 def dibujar_rejilla_mosaico_fiel(items_mosaico, _df_lab_activo, layout, _columnas_elegidas, _id_campana_destino):
     COLUMNAS_POR_FILA = _columnas_elegidas
+    
     for i in range(0, len(items_mosaico), COLUMNAS_POR_FILA):
         bloque_items = items_mosaico[i:i + COLUMNAS_POR_FILA]
         columnas_ui = st.columns(COLUMNAS_POR_FILA)
         
         for idx, fila_p in enumerate(bloque_items):
             with columnas_ui[idx]:
-                # NORMALIZACIÓN SEGURA: Mantenemos el ID como texto sin truncar con int()
+                # 1. IDENTIFICACIÓN Y NORMALIZACIÓN DE LLAVES CLAVE
                 id_p_raw = str(fila_p["id_producto"]).strip()
+                id_super_oferta = str(fila_p.get("id_super", "")).strip()
+                id_camp_destino_str = str(_id_campana_destino).strip()
                 
-                # Buscamos si ya tiene registro guardado en la pizarra para precargar datos
-                match_pizarra = _df_lab_activo[_df_lab_activo["id_producto"] == id_p_raw]
-                id_activa_real = None
                 precio_defecto = float(fila_p.get("precio_oferta", 0.0))
-                check_inicial = False
+                id_activa_real = None
+                check_inicial = False  # Por defecto arranca desmarcado
                 
-                if not match_pizarra.empty:
-                    # 1. DETECCIÓN AUTOMÁTICA DE LA COLUMNA DE CAMPAÑA
-                    # Buscamos qué columna de la pizarra contiene la palabra 'campana' o 'camp'
-                    columna_campana = None
-                    posibles_nombres = ["id_campana", "id_campana_destino", "id_camp_dest", "campana"]
-                    
-                    for col in posibles_nombres:
-                        if col in match_pizarra.columns:
-                            columna_campana = col
+                # 2. INTENTO DE FILTRADO CRUZADO ESTRICTO EN LA PIZARRA GLOBAL
+                if not _df_lab_activo.empty:
+                    # Detectamos el nombre real de la columna de campaña en la pizarra
+                    col_campana = "id_campana"
+                    for col in ["id_campana", "id_campana_destino", "id_camp_dest", "campana"]:
+                        if col in _df_lab_activo.columns:
+                            col_campana = col
                             break
                     
-                    # Si no encontramos ninguna por nombre explícito, tomamos la primera que contenga 'camp'
-                    if not columna_campana:
-                        columnas_candidatas = [c for c in match_pizarra.columns if "camp" in c.lower()]
-                        if columnas_candidatas:
-                            columna_campana = columnas_candidatas[0]
-
-                    # 2. FILTRADO INTELIGENTE
-                    if columna_campana:
-                        # Si encontramos la columna, filtramos de forma segura
-                        match_campana = match_pizarra[match_pizarra[columna_campana].astype(str) == str(_id_campana_destino)]
-                        
-                        if not match_campana.empty:
-                            fila_reciente = match_campana.tail(1)
-                            precio_defecto = float(fila_reciente["precio_oferta_proyectado"].values[0])
-                            id_activa_real = int(fila_reciente["id_oferta_activa"].values[0])
-                            check_inicial = True
-                    else:
-                        # Si de plano no existe ninguna columna de campaña, usamos la lógica por defecto de la fila
-                        fila_reciente = match_pizarra.tail(1)
+                    # Filtramos por Producto + Supermercado + Campaña Destino Seleccionada
+                    match_estricto = _df_lab_activo[
+                        (_df_lab_activo["id_producto"].astype(str).str.strip() == id_p_raw) &
+                        (_df_lab_activo["id_super"].astype(str).str.strip() == id_super_oferta) &
+                        (_df_lab_activo[col_campana].astype(str).str.strip() == id_camp_destino_str)
+                    ]
+                    
+                    # Si existe el registro exacto en la base de datos para esta campaña, se marca
+                    if not match_estricto.empty:
+                        fila_reciente = match_estricto.tail(1)
                         precio_defecto = float(fila_reciente["precio_oferta_proyectado"].values[0])
                         id_activa_real = int(fila_reciente["id_oferta_activa"].values[0])
-                        # No marcamos check_inicial para evitar falsos positivos              
-
-                # Ajuste dinámico de texto según slider de densidad
+                        check_inicial = True
+                
+                # 3. CONSTRUCCIÓN DE INTERFAZ GRÁFICA (HTML & LAYOUT)
                 limite_caracteres = layout["trim"]
                 nombre_lbl = str(fila_p.get("nombre", "")).strip().upper()[:limite_caracteres]
                 marca_lbl = str(fila_p.get("marca", "Sin Marca")).strip()[:10]
@@ -339,19 +333,17 @@ def dibujar_rejilla_mosaico_fiel(items_mosaico, _df_lab_activo, layout, _columna
                 with st.container(border=True):
                     st.image(url_foto_render, use_container_width=True)
                     st.markdown(html_especificacion, unsafe_allow_html=True)
-                    # --- ADAPTACIÓN DE CLAVES ÚNICAS POR COMBINACIÓN DE PRODUCTO + SUPERMERCADO
+                    
+                    # Sanitización de llaves de control para la memoria RAM de Streamlit
                     id_sanitizado = id_p_raw.replace(" ", "_")
-                    id_super_oferta = int(fila_p.get("id_super", 0)) # Capturamos el súper dueño de esta oferta específica
+                    p_key_string = f"num_pvp_{id_sanitizado}_{id_super_oferta}_{id_camp_destino_str}"
+                    m_key_string = f"chk_load_{id_sanitizado}_{id_super_oferta}_{id_camp_destino_str}"
                     
-                    # Inyectamos el id_super_oferta en la cadena para romper cualquier duplicidad de SKUs
-                    p_key_string = f"num_pvp_{id_sanitizado}_{id_super_oferta}_{_id_campana_destino}"
-                    m_key_string = f"chk_load_{id_sanitizado}_{id_super_oferta}_{_id_campana_destino}"
-                    
-                    # Los widgets ahora nacerán con identificadores totalmente aislados en la RAM
+                    # Render de controles interactivos con el estado correcto reflejado
                     st.number_input("PVP ($):", min_value=0.0, value=precio_defecto, step=0.01, format="%.2f", key=p_key_string)
                     st.checkbox("Incluir", value=check_inicial, key=m_key_string)
                                      
-                    # Conservamos el mapeo en RAM indexado por el ID de texto original
+                    # Persistencia interna en el diccionario del formulario
                     st.session_state["formulario_imagenes_dict"][id_p_raw] = {
                         "id_registro": id_activa_real,
                         "id_producto": id_p_raw,
@@ -359,10 +351,6 @@ def dibujar_rejilla_mosaico_fiel(items_mosaico, _df_lab_activo, layout, _columna
                         "marcado_key": m_key_string
                     }
 
-# =====================================================================
-# PROGRAMA: registro_ofertas_mosaico_fiel.py | PARTE 5 DE 5
-# MODULO: INTERFAZ DINÁMICA DE PASILLOS Y PERSISTENCIA CORPORATIVA (UPSERT)
-# =====================================================================
 if form_categorias:
     nombres_pestanas = [cat["nombre"].upper() for cat in form_categorias]
     pestanas_ui = st.tabs(nombres_pestanas)
