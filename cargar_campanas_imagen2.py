@@ -193,7 +193,8 @@ if "stat_total" not in st.session_state: st.session_state.stat_total = 0
 if "stat_seleccionados" not in st.session_state: st.session_state.stat_seleccionados = 0
 if "id_super_operador" not in st.session_state: st.session_state["id_super_operador"] = None
 if "formulario_imagenes_dict" not in st.session_state: st.session_state["formulario_imagenes_dict"] = {}
-
+if "marcador_temporal_checks" not in st.session_state: 
+    st.session_state["marcador_temporal_checks"] = {}
 
 lista_items = []
 df_pool_unicos = pd.DataFrame()
@@ -315,9 +316,7 @@ with metric_col4: st.metric(label="✅ Incluidos en Campaña Activa", value=st.s
 # =====================================================================
 # MODIFICACIÓN EN PARTE 4: AGREGAR PARÁMETRO Y PASO 3 DE MARCADO
 # =====================================================================
-
 def dibujar_rejilla_mosaico_fiel(items_mosaico, _df_lab_activo, layout, _columnas_elegidas, _id_campana_destino, productos_campana=None):
-    # Si por alguna razón viene vacío, inicializamos un conjunto seguro
     if productos_campana is None:
         productos_campana = set()
         
@@ -328,7 +327,6 @@ def dibujar_rejilla_mosaico_fiel(items_mosaico, _df_lab_activo, layout, _columna
         
         for idx, fila_p in enumerate(bloque_items):
             with columnas_ui[idx]:
-                # 1. IDENTIFICACIÓN Y NORMALIZACIÓN DE LLAVES CLAVE
                 id_p_raw = str(fila_p["id_producto"]).strip()
                 id_super_oferta = str(fila_p.get("id_super", "")).strip()
                 id_camp_destino_str = str(_id_campana_destino).strip()
@@ -336,27 +334,28 @@ def dibujar_rejilla_mosaico_fiel(items_mosaico, _df_lab_activo, layout, _columna
                 precio_defecto = float(fila_p.get("precio_oferta", 0.0))
                 id_activa_real = None
                 
-                # --- PASO 3: El check se activa sólo si el producto está en el set filtrado ---
-                check_inicial = id_p_raw in productos_campana
+                # --- LÓGICA DE PERSISTENCIA EN MEMORIA ENTRE PASILLOS ---
+                # Si el producto ya fue modificado temporalmente en esta sesión, recuperamos ese estado
+                if id_p_raw in st.session_state["marcador_temporal_checks"]:
+                    check_inicial = st.session_state["marcador_temporal_checks"][id_p_raw]["marcado"]
+                    precio_defecto = st.session_state["marcador_temporal_checks"][id_p_raw]["precio"]
+                else:
+                    # Si no ha sido tocado en esta sesión, heredamos si ya existía en la BD para esta campaña
+                    check_inicial = id_p_raw in productos_campana
+                    
+                    # Buscamos correspondencia en la pizarra para extraer su precio sugerido base
+                    if not _df_lab_activo.empty:
+                        match_pizarra = _df_lab_activo[_df_lab_activo["id_producto"].astype(str).str.strip() == id_p_raw]
+                        if not match_pizarra.empty:
+                            fila_reciente = match_pizarra.tail(1)
+                            precio_defecto = float(fila_reciente["precio_oferta_proyectado"].values[0])
+                            id_activa_real = int(fila_reciente["id_oferta_activa"].values[0])
                 
-                # Buscamos correspondencia básica en ofertas_activas para heredar precios proyectados
-                if not _df_lab_activo.empty:
-                    match_pizarra = _df_lab_activo[_df_lab_activo["id_producto"].astype(str).str.strip() == id_p_raw]
-                    if not match_pizarra.empty:
-                        fila_reciente = match_pizarra.tail(1)
-                        precio_defecto = float(fila_reciente["precio_oferta_proyectado"].values[0])
-                        id_activa_real = int(fila_reciente["id_oferta_activa"].values[0])
-
-                
-                # -------------------------------------------------------------
-                # El resto de tu código (CONSTRUCCIÓN DE INTERFAZ GRÁFICA HTML)
-                # permanece exactamente igual hasta llegar al checkbox...
-                # -------------------------------------------------------------
+                # Renderizado HTML (Mantenemos tu diseño idéntico)
                 limite_caracteres = layout["trim"]
                 nombre_lbl = str(fila_p.get("nombre", "")).strip().upper()[:limite_caracteres]
                 marca_lbl = str(fila_p.get("marca", "Sin Marca")).strip()[:10]
                 formato_empaque = f"{fila_p.get('tamano', '')} {fila_p.get('unidad', '')}".strip()
-                
                 sufijo_lider = "<span style='color: #f38ba8; font-weight: bold;'>(L)</span>" if fila_p.get("es_local", False) else ""
                 
                 html_especificacion = f"""
@@ -376,14 +375,24 @@ def dibujar_rejilla_mosaico_fiel(items_mosaico, _df_lab_activo, layout, _columna
                     p_key_string = f"num_pvp_{id_sanitizado}_{id_super_oferta}_{id_camp_destino_str}"
                     m_key_string = f"chk_load_{id_sanitizado}_{id_super_oferta}_{id_camp_destino_str}"
                     
-                    st.number_input("PVP ($):", min_value=0.0, value=precio_defecto, step=0.01, format="%.2f", key=p_key_string)
-                    st.checkbox("Incluir", value=check_inicial, key=m_key_string) # <-- Ahora usa check_inicial sin riesgo de KeyError
-                                     
+                    # Guardamos el mapeo base en session_state para saber que este artículo existe en pantalla
                     st.session_state["formulario_imagenes_dict"][id_p_raw] = {
                         "id_registro": id_activa_real,
                         "id_producto": id_p_raw,
-                        "precio_key": p_key_string,
-                        "marcado_key": m_key_string
+                        "id_super": id_super_oferta
+                    }
+                    
+                    # Capturamos la interacción del usuario y la guardamos en caliente en la memoria persistente
+                    input_precio = st.number_input("PVP ($):", min_value=0.0, value=precio_defecto, step=0.01, format="%.2f", key=p_key_string)
+                    input_check = st.checkbox("Incluir", value=check_inicial, key=m_key_string)
+                    
+                    # Cada vez que el usuario mueva algo, se actualiza el marcador temporal sin necesidad de guardar
+                    st.session_state["marcador_temporal_checks"][id_p_raw] = {
+                        "id_producto": id_p_raw,
+                        "id_super": id_super_oferta,
+                        "marcado": input_check,
+                        "precio": input_precio,
+                        "id_registro": id_activa_real
                     }
 
 if form_categorias:
@@ -418,42 +427,38 @@ with col_btn1:
     if st.button("🚀 Disparar Inyección Express de Todo lo Seleccionado", use_container_width=True, type="primary"):
         payload_rafaga = []
         
-        # Leemos las referencias guardadas en RAM por la rejilla
-        for id_prod, referencias in st.session_state.get("formulario_imagenes_dict", {}).items():
-            marcado_final = st.session_state.get(referencias["marcado_key"], False)
-            precio_final = st.session_state.get(referencias["precio_key"], 0.0)
-            id_reg_activa = referencias.get("id_registro")
+        # 🌟 CORRECCIÓN: Leemos directamente del almacén temporal que recuerda todo entre pasillos
+        for id_prod, datos in st.session_state.get("marcador_temporal_checks", {}).items():
+            marcado_final = datos.get("marcado", False)
+            precio_final = datos.get("precio", 0.0)
+            id_reg_activa = datos.get("id_registro")
+            id_super_item = datos.get("id_super")
             
-            # Solo procesamos lo que el usuario marcó con precio válido
+            # Solo procesamos lo que quedó marcado y tenga un precio válido
             if marcado_final and precio_final > 0.0:
                 payload_rafaga.append({
                     "id_producto": str(id_prod).strip(),
                     "precio": float(precio_final),
-                    "id_activa": id_reg_activa
+                    "id_activa": id_reg_activa,
+                    "id_super": id_super_item
                 })
-
-        # =====================================================================
-        # CÓDIGO DEFINITIVO PARA LA PARTE 6 (BOTÓN DE INYECCIÓN EXPRESS)
-        # =====================================================================
+                
         if payload_rafaga:
             conn = None
             try:
                 conn = psycopg2.connect(url_limpia)
                 cur = conn.cursor()
                 
-                # 1. Determinamos el ID del supermercado de forma ultra segura
-                id_super_seguro = id_super_contexto
-                if id_super_seguro is None:
-                    id_super_seguro = st.session_state.get("id_super_operador")
+                id_super_seguro = id_super_contexto if id_super_contexto is not None else st.session_state.get("id_super_operador")
                     
                 for reg in payload_rafaga:
-                    id_prod_clean = str(reg["id_producto"]).strip()
+                    id_prod_clean = reg["id_producto"]
                     id_final_super = id_super_seguro if id_super_seguro is not None else reg.get("id_super")
                     
                     if id_final_super is None:
                         continue
-        
-                    # 2. Inserción limpia: Si vuelve a intentar meter la misma oferta, actualiza el precio
+    
+                    # Query histórico con Upsert anti-duplicados
                     query_insert = """
                     INSERT INTO public.ofertas (
                         id_producto, id_super, precio_oferta, id_campana,
@@ -472,7 +477,7 @@ with col_btn1:
                         id_campana_destino
                     ))
                     
-                    # 3. UPSERT en ofertas_activas: Sincroniza y actualiza la pizarra general
+                    # Query de Pizarra Activa
                     query_upsert_activa = """
                     INSERT INTO public.ofertas_activas (id_producto, id_super, precio_oferta_proyectado)
                     VALUES (%s, %s, %s)
@@ -490,20 +495,23 @@ with col_btn1:
                 conn.commit()
                 st.toast("¡Inyección Histórica y Pizarra Activa Sincronizadas!", icon="✅")
                 
-                # 🌟 CRÍTICO: Limpiamos la caché global de datos para obligar al programa 
-                # a volver a consultar las tablas de la BD en la recarga
-                st.cache_data.clear()
+                # 🌟 IMPORTANTE: Como ya guardamos en la base de datos, vaciamos el marcador temporal 
+                # de la memoria RAM para la siguiente tanda de selección
+                st.session_state["marcador_temporal_checks"] = {}
+                st.session_state["formulario_imagenes_dict"] = {}
                 
-                # Forzamos el refresco completo de la vista de Streamlit
+                st.cache_data.clear()
                 st.rerun()
-        
+    
             except Exception as err_api:
                 if conn: conn.rollback()
                 st.error(f"❌ Error de persistencia relacional en Neon: {err_api}")
             finally:
                 if conn: conn.close()
-
-
+        else:
+            st.warning("⚠️ No se ha detectado ningún elemento incluido con precio válido en memoria.")
+    
+    
 with col_btn2:
     if st.button("🧹 Limpiar y Resetear Pizarra Completa de Activos", use_container_width=True, type="secondary"):
         query_delete = "DELETE FROM public.ofertas_activas;"
