@@ -259,24 +259,43 @@ def dibujar_rejilla_mosaico_fiel(items_mosaico, _df_lab_activo, layout, _columna
                 
                 # Buscamos si ya tiene registro guardado en la pizarra para precargar datos
                 match_pizarra = _df_lab_activo[_df_lab_activo["id_producto"] == id_p_raw]
-                
                 id_activa_real = None
                 precio_defecto = float(fila_p.get("precio_oferta", 0.0))
-                check_inicial = False  # Por defecto arranca desmarcado
+                check_inicial = False
                 
                 if not match_pizarra.empty:
-                    # Filtramos la pizarra para ver si este producto ya está guardado en la campaña destino seleccionada
-                    # NOTA: Asegúrate de que la columna en tu DataFrame se llame exactamente 'id_campana'
-                    match_campana = match_pizarra[match_pizarra["id_campana"].astype(str) == str(_id_campana_destino)]
+                    # 1. DETECCIÓN AUTOMÁTICA DE LA COLUMNA DE CAMPAÑA
+                    # Buscamos qué columna de la pizarra contiene la palabra 'campana' o 'camp'
+                    columna_campana = None
+                    posibles_nombres = ["id_campana", "id_campana_destino", "id_camp_dest", "campana"]
                     
-                    if not match_campana.empty:
-                        # Si hay coincidencia, tomamos el registro guardado en esa campaña
-                        fila_reciente = match_campana.tail(1)
+                    for col in posibles_nombres:
+                        if col in match_pizarra.columns:
+                            columna_campana = col
+                            break
+                    
+                    # Si no encontramos ninguna por nombre explícito, tomamos la primera que contenga 'camp'
+                    if not columna_campana:
+                        columnas_candidatas = [c for c in match_pizarra.columns if "camp" in c.lower()]
+                        if columnas_candidatas:
+                            columna_campana = columnas_candidatas[0]
+
+                    # 2. FILTRADO INTELIGENTE
+                    if columna_campana:
+                        # Si encontramos la columna, filtramos de forma segura
+                        match_campana = match_pizarra[match_pizarra[columna_campana].astype(str) == str(_id_campana_destino)]
+                        
+                        if not match_campana.empty:
+                            fila_reciente = match_campana.tail(1)
+                            precio_defecto = float(fila_reciente["precio_oferta_proyectado"].values[0])
+                            id_activa_real = int(fila_reciente["id_oferta_activa"].values[0])
+                            check_inicial = True
+                    else:
+                        # Si de plano no existe ninguna columna de campaña, usamos la lógica por defecto de la fila
+                        fila_reciente = match_pizarra.tail(1)
                         precio_defecto = float(fila_reciente["precio_oferta_proyectado"].values[0])
                         id_activa_real = int(fila_reciente["id_oferta_activa"].values[0])
-                        
-                        # ¡CORRECCIÓN! Solo se marca si existía previamente en esta campaña destino
-                        check_inicial = True
+                        # No marcamos check_inicial para evitar falsos positivos              
 
                 # Ajuste dinámico de texto según slider de densidad
                 limite_caracteres = layout["trim"]
