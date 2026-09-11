@@ -431,8 +431,9 @@ with col_btn1:
                     "precio": float(precio_final),
                     "id_activa": id_reg_activa
                 })
+
         # =====================================================================
-        # MODIFICACIÓN EN PARTE 6: EXTRACCIÓN PROTEGIDA CONTRA NONETYPE
+        # CÓDIGO DEFINITIVO PARA LA PARTE 6 (BOTÓN DE INYECCIÓN EXPRESS)
         # =====================================================================
         if payload_rafaga:
             conn = None
@@ -444,19 +445,15 @@ with col_btn1:
                 id_super_seguro = id_super_contexto
                 if id_super_seguro is None:
                     id_super_seguro = st.session_state.get("id_super_operador")
-                # --- CICLO DE INSERCIÓN EN TU PARTE 6 CORREGIDO ---
-                for reg in payload_rafaga:
-                    # 🌟 LA SOLUCIÓN: Definimos la variable limpia al inicio del ciclo
-                    id_prod_clean = str(reg["id_producto"]).strip()
                     
-                    # Conservamos tu lógica de obtención del súper de respaldo
+                for reg in payload_rafaga:
+                    id_prod_clean = str(reg["id_producto"]).strip()
                     id_final_super = id_super_seguro if id_super_seguro is not None else reg.get("id_super")
                     
                     if id_final_super is None:
-                        st.error("❌ No se pudo determinar el ID del supermercado para el producto. Operación abortada.")
                         continue
         
-                    # Inserción limpia con beneficio de Constraint nativo
+                    # 2. Inserción limpia: Si vuelve a intentar meter la misma oferta, actualiza el precio
                     query_insert = """
                     INSERT INTO public.ofertas (
                         id_producto, id_super, precio_oferta, id_campana,
@@ -465,17 +462,17 @@ with col_btn1:
                     )
                     VALUES (%s, %s, %s, %s, NULL, NULL, NULL, False, False, False)
                     ON CONFLICT (id_producto, id_super, id_campana) 
-                    DO NOTHING;
+                    DO UPDATE SET 
+                        precio_oferta = EXCLUDED.precio_oferta;
                     """
-                    
                     cur.execute(query_insert, (
-                        id_prod_clean,       # <-- Ahora sí está definido perfectamente
+                        id_prod_clean,
                         int(id_final_super),
                         reg["precio"],
                         id_campana_destino
                     ))
                     
-                    # UPSERT en ofertas_activas (Mantiene la pizarra al día)
+                    # 3. UPSERT en ofertas_activas: Sincroniza y actualiza la pizarra general
                     query_upsert_activa = """
                     INSERT INTO public.ofertas_activas (id_producto, id_super, precio_oferta_proyectado)
                     VALUES (%s, %s, %s)
@@ -485,19 +482,27 @@ with col_btn1:
                         updated_at = CURRENT_TIMESTAMP;
                     """
                     cur.execute(query_upsert_activa, (
-                        id_prod_clean,       # <-- Ahora sí está definido perfectamente
+                        id_prod_clean,
                         int(id_final_super),
                         reg["precio"]
                     ))
-
-                         
+                    
+                conn.commit()
+                st.toast("¡Inyección Histórica y Pizarra Activa Sincronizadas!", icon="✅")
+                
+                # 🌟 CRÍTICO: Limpiamos la caché global de datos para obligar al programa 
+                # a volver a consultar las tablas de la BD en la recarga
+                st.cache_data.clear()
+                
+                # Forzamos el refresco completo de la vista de Streamlit
+                st.rerun()
+        
             except Exception as err_api:
                 if conn: conn.rollback()
                 st.error(f"❌ Error de persistencia relacional en Neon: {err_api}")
             finally:
                 if conn: conn.close()
-        else:
-            st.warning("⚠️ No se ha detectado ningún elemento incluido con precio válido.")
+
 
 with col_btn2:
     if st.button("🧹 Limpiar y Resetear Pizarra Completa de Activos", use_container_width=True, type="secondary"):
