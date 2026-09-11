@@ -184,12 +184,16 @@ except Exception as e:
     st.error(f"❌ Error al conectar con la pizarra de ofertas activas: {e}")
     df_laboratorio_activo = pd.DataFrame()
 
-# Inicializaciones de Session State (Incluyendo la nueva métrica)
+# =====================================================================
+# MODIFICACIÓN EN PARTE 3: INICIALIZACIONES SEGURAS DE SESIÓN
+# =====================================================================
 if "stat_lider" not in st.session_state: st.session_state.stat_lider = 0
 if "stat_otros" not in st.session_state: st.session_state.stat_otros = 0
 if "stat_total" not in st.session_state: st.session_state.stat_total = 0
-if "stat_seleccionados" not in st.session_state: st.session_state.stat_seleccionados = 0  # <--- NUEVA MÉTRICA
+if "stat_seleccionados" not in st.session_state: st.session_state.stat_seleccionados = 0
+if "id_super_operador" not in st.session_state: st.session_state["id_super_operador"] = None
 if "formulario_imagenes_dict" not in st.session_state: st.session_state["formulario_imagenes_dict"] = {}
+
 
 lista_items = []
 df_pool_unicos = pd.DataFrame()
@@ -460,11 +464,27 @@ with col_btn1:
                             precio_oferta_proyectado = EXCLUDED.precio_oferta_proyectado,
                             updated_at = CURRENT_TIMESTAMP;
                     """
+
+                    # =====================================================================
+                    # MODIFICACIÓN EN PARTE 6: ASIGNACIÓN SEGURA DEL SUPERMERCADO EN EL INSERT
+                    # =====================================================================
+                    # Reemplaza la línea vieja: int(st.session_state["id_super_operador"])
+                    # Por id_super_contexto (el que está seleccionado actualmente en el menú visual)
+                    
+                    cur.execute(query_insert, (
+                        reg["id_producto"],
+                        int(id_super_contexto), # 🌟 Usamos el súper de la pantalla, que siempre existe y está garantizado
+                        reg["precio"],
+                        id_campana_destino
+                    ))
+                    
+                    # Haz el mismo cambio abajo en el query_upsert_activa:
                     cur.execute(query_upsert_activa, (
-                        reg["id_producto"], 
-                        int(st.session_state["id_super_operador"]), 
+                        reg["id_producto"],
+                        int(id_super_contexto), # 🌟 Usamos el súper de la pantalla
                         reg["precio"]
                     ))
+
                 
                 conn.commit()
                 st.toast("¡Inyección Histórica y Pizarra Activa Sincronizadas!", icon="✅")
