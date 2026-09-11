@@ -157,12 +157,12 @@ with col_s2:
 
     
 with col_s5:
-    columnas_elegidas = st.slider("Columnas por Fila (Densidad):", min_value=6, max_value=15, value=9, step=3)
+    columnas_elegidas = st.slider("Columnas por Fila (Densidad):", min_value=6, max_value=12, value=6, step=2)
     config_zoom = {
         6: {"altura_px": 85, "font_b": "0.72rem", "font_span": "0.62rem", "trim": 20},
-        9: {"altura_px": 65, "font_b": "0.65rem", "font_span": "0.58rem", "trim": 14},
-        12: {"altura_px": 50, "font_b": "0.58rem", "font_span": "0.52rem", "trim": 10},
-        15: {"altura_px": 42, "font_b": "0.52rem", "font_span": "0.48rem", "trim": 8}
+        8: {"altura_px": 70, "font_b": "0.70rem", "font_span": "0.60rem", "trim": 16},
+        10: {"altura_px": 65, "font_b": "0.65rem", "font_span": "0.58rem", "trim": 14},
+        12: {"altura_px": 50, "font_b": "0.58rem", "font_span": "0.52rem", "trim": 10}
     }
     layout_dinamico = config_zoom.get(columnas_elegidas, config_zoom[9])
     
