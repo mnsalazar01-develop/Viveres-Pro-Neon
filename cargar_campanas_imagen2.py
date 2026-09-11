@@ -141,6 +141,21 @@ with col_s2:
             for c in campanas_filtradas
         }
     
+    # 5. Desplegamos el selectbox (aparecerá vacío o deshabilitado si no hay coincidencias)
+    campana_destino_sel = st.selectbox(
+        "📅 Campaña / Folleto Destino *:", 
+        options=sorted(lista_ids_campanas), 
+        format_func=lambda x: dict_campanas.get(x, f"ID: {x}"),
+        index=0 if lista_ids_campanas else None,
+        disabled=not lista_ids_campanas
+    )
+    
+    # 6. Asignamos el ID de la campaña seleccionada
+    id_campana_destino = None
+    if campana_destino_sel:
+        id_campana_destino = int(campana_destino_sel)
+
+    
 with col_s5:
     columnas_elegidas = st.slider("Columnas por Fila (Densidad):", min_value=6, max_value=15, value=9, step=3)
     config_zoom = {
