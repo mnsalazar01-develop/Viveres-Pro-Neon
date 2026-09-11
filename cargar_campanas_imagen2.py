@@ -108,7 +108,7 @@ col_s1, col_s2, col_s3, col_s4, col_s5 = st.columns([1.2, 1.4, 1.1, 1.1, 1.4])
 
 with col_s1:
     ids_supers_activos = {s.get('id_super'): s.get('nombre_supermercado') for s in res_s if s.get('id_super')}
-    id_super_contexto = st.selectbox("Supermercado Objetivo:", options=ids_supers_activos, format_func=lambda x: mapa_supers_ram.get(x, f"Super #{x}"))
+    id_super_contexto = st.selectbox("🏪 Supermercado:", options=ids_supers_activos, format_func=lambda x: mapa_supers_ram.get(x, f"Super #{x}"))
 
 with col_s2:
     # 1. Inicializamos todas las variables vacías para evitar NameError
@@ -143,7 +143,7 @@ with col_s2:
     
     # 5. Desplegamos el selectbox (aparecerá vacío o deshabilitado si no hay coincidencias)
     campana_destino_sel = st.selectbox(
-        "📅 Campaña / Folleto Destino *:", 
+        "📅 Campaña:", 
         options=sorted(lista_ids_campanas), 
         format_func=lambda x: dict_campanas.get(x, f"ID: {x}"),
         index=0 if lista_ids_campanas else None,
