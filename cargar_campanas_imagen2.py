@@ -111,34 +111,45 @@ with col_s1:
     id_super_contexto = st.selectbox("Supermercado Objetivo:", options=ids_supers_activos, format_func=lambda x: mapa_supers_ram.get(x, f"Super #{x}"))
 
 with col_s2:
-    # 1. INICIALIZA SIEMPRE LAS VARIABLES AL PRINCIPIO
+    # 1. Inicializamos todas las variables vacías para evitar NameError
     campanas_filtradas = []
     lista_ids_campanas = []
     dict_campanas = {}
 
-    # 2. FILTRA LAS CAMPAÑAS (SI EXISTEN LAS CONDICIONES)
-    if res_c and st.session_state.get("id_super_operador"):
+    # 2. Obtenemos el ID del supermercado desde la sesión de forma segura
+    id_super_actual = st.session_state.get("id_super_operador")
+
+    # 3. Filtramos de manera estricta asegurando que ambos IDs sean tratados como enteros
+    if res_c and id_super_actual is not None:
         for c in res_c:
-            if int(c.get('id_super')) == int(st.session_state["id_super_operador"]):
-                campanas_filtradas.append(c)
+            try:
+                # Convertimos ambos IDs a enteros antes de comparar para evitar fallas de tipo (str vs int)
+                id_campana_super = int(c.get('id_super', 0))
+                id_filtro_super = int(id_super_actual)
                 
-        # Generas las listas y diccionarios solo si hubo campañas filtradas
+                if id_campana_super == id_filtro_super:
+                    campanas_filtradas.append(c)
+            except (ValueError, TypeError):
+                # Si algún ID viene corrupto o vacío, ignoramos ese registro en lugar de romper la app
+                continue
+                
+        # 4. Construimos las estructuras solo con las campañas que pasaron el filtro
         lista_ids_campanas = [c['id_campana'] for c in campanas_filtradas]
         dict_campanas = {
             c['id_campana']: f"ID: {c['id_campana']} | {c['nombre_campana'].upper()} [{c['fecha_inicio']} al {c['fecha_fin']}]" 
             for c in campanas_filtradas
         }
     
-    # 3. EL SELECTBOX YA NO FALLARÁ PORQUE LA LISTA SIEMPRE EXISTE (AUNQUE ESTÉ VACÍA)
+    # 5. Desplegamos el selectbox (aparecerá vacío o deshabilitado si no hay coincidencias)
     campana_destino_sel = st.selectbox(
         "📅 Campaña / Folleto Destino *:", 
         options=sorted(lista_ids_campanas), 
         format_func=lambda x: dict_campanas.get(x, f"ID: {x}"),
         index=0 if lista_ids_campanas else None,
-        disabled=not lista_ids_campanas # Opcional: deshabilita el selectbox si no hay opciones
+        disabled=not lista_ids_campanas
     )
     
-    # 4. ASIGNACIÓN CORRECTA DEL ID
+    # 6. Asignamos el ID de la campaña seleccionada
     id_campana_destino = None
     if campana_destino_sel:
         id_campana_destino = int(campana_destino_sel)
