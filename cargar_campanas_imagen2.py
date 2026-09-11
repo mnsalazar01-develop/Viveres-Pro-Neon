@@ -431,65 +431,64 @@ with col_btn1:
                     "precio": float(precio_final),
                     "id_activa": id_reg_activa
                 })
-        
+        # =====================================================================
+        # MODIFICACIÓN EN PARTE 6: EXTRACCIÓN PROTEGIDA CONTRA NONETYPE
+        # =====================================================================
         if payload_rafaga:
             conn = None
             try:
                 conn = psycopg2.connect(url_limpia)
                 cur = conn.cursor()
                 
+                # 1. Determinamos el ID del supermercado de forma ultra segura
+                id_super_seguro = id_super_contexto
+                if id_super_seguro is None:
+                    id_super_seguro = st.session_state.get("id_super_operador")
+                    
                 for reg in payload_rafaga:
-                    # 1. Inserción limpia en la tabla histórica oficial de ofertas (Con su Campaña)
+                    # Si las variables globales fallan, tomamos el súper asignado al producto en el mosaico
+                    id_final_super = id_super_seguro if id_super_seguro is not None else reg.get("id_super")
+                    
+                    if id_final_super is None:
+                        st.error("❌ No se pudo determinar el ID del supermercado para el producto. Operación abortada.")
+                        continue
+        
+                    # 2. Inserción limpia en la tabla histórica oficial de ofertas
                     query_insert = """
-                        INSERT INTO public.ofertas (
-                            id_producto, id_super, precio_oferta, id_campana, 
-                            id_sucursal, numero_pagina, posicion_slot, tipo_oferta, 
-                            es_favorita, en_lista_compras, oferta_comprada
-                        )
-                        VALUES (%s, %s, %s, %s, NULL, NULL, NULL, 'C', False, False, False);
+                    INSERT INTO public.ofertas (
+                        id_producto, id_super, precio_oferta, id_campana,
+                        id_sucursal, numero_pagina, posicion_slot, tipo_oferta,
+                        es_favorita, en_lista_compras, oferta_comprada
+                    )
+                    VALUES (%s, %s, %s, %s, NULL, NULL, NULL, 'C', False, False, False);
                     """
-                    cur.execute(query_insert, (
-                        reg["id_producto"], 
-                        int(st.session_state["id_super_operador"]), 
-                        reg["precio"], 
-                        id_campana_destino
-                    ))
-                    
-                    # 2. UPSERT en ofertas_activas: Sincroniza y actualiza el último precio en la pizarra general
-                    query_upsert_activa = """
-                        INSERT INTO public.ofertas_activas (id_producto, id_super, precio_oferta_proyectado)
-                        VALUES (%s, %s, %s)
-                        ON CONFLICT (id_producto, id_super) 
-                        DO UPDATE SET 
-                            precio_oferta_proyectado = EXCLUDED.precio_oferta_proyectado,
-                            updated_at = CURRENT_TIMESTAMP;
-                    """
-
-                    # =====================================================================
-                    # MODIFICACIÓN EN PARTE 6: ASIGNACIÓN SEGURA DEL SUPERMERCADO EN EL INSERT
-                    # =====================================================================
-                    # Reemplaza la línea vieja: int(st.session_state["id_super_operador"])
-                    # Por id_super_contexto (el que está seleccionado actualmente en el menú visual)
-                    
                     cur.execute(query_insert, (
                         reg["id_producto"],
-                        int(id_super_contexto), # 🌟 Usamos el súper de la pantalla, que siempre existe y está garantizado
+                        int(id_final_super),  # <--- ID garantizado sin riesgo de NoneType
                         reg["precio"],
                         id_campana_destino
                     ))
                     
-                    # Haz el mismo cambio abajo en el query_upsert_activa:
+                    # 3. UPSERT en ofertas_activas: Sincroniza y actualiza la pizarra general
+                    query_upsert_activa = """
+                    INSERT INTO public.ofertas_activas (id_producto, id_super, precio_oferta_proyectado)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (id_producto, id_super)
+                    DO UPDATE SET
+                        precio_oferta_proyectado = EXCLUDED.precio_oferta_proyectado,
+                        updated_at = CURRENT_TIMESTAMP;
+                    """
                     cur.execute(query_upsert_activa, (
                         reg["id_producto"],
-                        int(id_super_contexto), # 🌟 Usamos el súper de la pantalla
+                        int(id_final_super),  # <--- ID garantizado sin riesgo de NoneType
                         reg["precio"]
                     ))
-
-                
+                    
                 conn.commit()
                 st.toast("¡Inyección Histórica y Pizarra Activa Sincronizadas!", icon="✅")
                 st.cache_data.clear()
                 st.rerun()
+
                 
             except Exception as err_api:
                 if conn: conn.rollback()
