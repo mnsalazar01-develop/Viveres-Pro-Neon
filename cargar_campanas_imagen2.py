@@ -184,10 +184,11 @@ except Exception as e:
     st.error(f"❌ Error al conectar con la pizarra de ofertas activas: {e}")
     df_laboratorio_activo = pd.DataFrame()
 
-# Inicializaciones de Session State
+# Inicializaciones de Session State (Incluyendo la nueva métrica)
 if "stat_lider" not in st.session_state: st.session_state.stat_lider = 0
 if "stat_otros" not in st.session_state: st.session_state.stat_otros = 0
 if "stat_total" not in st.session_state: st.session_state.stat_total = 0
+if "stat_seleccionados" not in st.session_state: st.session_state.stat_seleccionados = 0  # <--- NUEVA MÉTRICA
 if "formulario_imagenes_dict" not in st.session_state: st.session_state["formulario_imagenes_dict"] = {}
 
 lista_items = []
@@ -226,6 +227,26 @@ if not df_laboratorio_activo.empty and not df_p.empty:
         st.session_state.stat_lider = int(df_lote_express["es_local"].sum())
         st.session_state.stat_otros = st.session_state.stat_total - st.session_state.stat_lider
         
+        # --- CÁLCULO DE PRODUCTOS SELECCIONADOS DE LA CAMPAÑA ACTIVA ---
+        # Buscamos de forma segura el nombre de la columna para la campaña en el df global
+        col_campana = None
+        for col in ["id_campana", "id_campana_destino", "id_camp_dest", "campana"]:
+            if col in df_laboratorio_activo.columns:
+                col_campana = col
+                break
+        
+        if not col_campana:
+            columnas_candidatas = [c for c in df_laboratorio_activo.columns if "camp" in c.lower()]
+            if columnas_candidatas:
+                col_campana = columnas_candidatas[0]
+
+        # Si localizamos la columna y hay una campaña destino activa, filtramos y contamos los SKUs únicos
+        if col_campana and 'id_campana_destino' in locals() and id_campana_destino:
+            df_camp_activa = df_laboratorio_activo[df_laboratorio_activo[col_campana].astype(str) == str(id_campana_destino)]
+            st.session_state.stat_seleccionados = int(df_camp_activa["id_producto"].nunique())
+        else:
+            st.session_state.stat_seleccionados = 0
+        
         # Ordenamiento visual alfabético estándar por pasillos
         df_lote_express["id_cat"] = df_lote_express["id_cat"].fillna(0).astype(int)
         df_lote_express["id_subcat"] = df_lote_express["id_subcat"].fillna(0).astype(int)
@@ -234,13 +255,14 @@ if not df_laboratorio_activo.empty and not df_p.empty:
         df_pool_unicos = df_lote_express.sort_values(by=["id_cat", "id_subcat", "nombre_sort"], ascending=[True, True, True])
         lista_items = df_pool_unicos.to_dict(orient="records")
 
+
 # RENDER DE PANEL EJECUTIVO SUPERIOR
 st.write("### Resumen Ejecutivo de la Pizarra de Activos (SKUs Únicos)")
-metric_col1, metric_col2, metric_col3 = st.columns(3)
+metric_col1, metric_col2, metric_col3, metric_col4 = st.columns(4)
 with metric_col1: st.metric(label="📊 Productos Propios (Líder)", value=st.session_state.get("stat_lider", 0))
 with metric_col2: st.metric(label="🏪 SKUs Alerta Competencia", value=st.session_state.get("stat_otros", 0))
 with metric_col3: st.metric(label="📦 Total Mosaico Único", value=st.session_state.get("stat_total", 0))
-
+with metric_col4: st.metric(label="✅ Incluidos en Campaña Activa", value=st.session_state.get("stat_seleccionados", 0))
 
 # =====================================================================
 # PROGRAMA: registro_ofertas_mosaico_fiel.py | PARTE 4 DE 5
