@@ -104,7 +104,7 @@ if not df_o.empty and not df_p.empty and not df_c.empty:
 
 # RENDERIZADO DE COORDENADAS SUPERIORES (INTERFAZ VISUAL)
 st.markdown("#### 1. Coordenadas de Entrada Comercial")
-col_s1, col_s2, col_s3, col_s4, col_s5 = st.columns([1.2, 1.4, 1.1, 1.1, 1.4])
+col_s1, col_s2, col_s3, col_s4, col_s5 = st.columns([1.2, 1.8, 1.1, 1.1, 1.4])
 
 with col_s1:
     ids_supers_activos = {s.get('id_super'): s.get('nombre_supermercado') for s in res_s if s.get('id_super')}
