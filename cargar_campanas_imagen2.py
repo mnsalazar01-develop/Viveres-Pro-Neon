@@ -194,31 +194,33 @@ if "formulario_imagenes_dict" not in st.session_state: st.session_state["formula
 lista_items = []
 df_pool_unicos = pd.DataFrame()
 # =====================================================================
-# MODIFICACIÓN EN PARTE 3: OBTENCIÓN DE OFERTAS DE LA CAMPAÑA ACTIVA
-# =====================================================================
-
-# =====================================================================
-# PASO 1 CORREGIDO: FILTRADO ULTRA-SEGURO DE TIPOS DE DATOS
+# MODIFICACIÓN EN PARTE 3: FILTRADO ALINEADO CON LA GRILLA INFERIOR
 # =====================================================================
 productos_en_campana_activa = set()
 
 if id_campana_destino and res_o:
     try:
         id_destino_int = int(id_campana_destino)
+        # Capturamos el súper seleccionado en pantalla de col_s1
+        id_super_actual_int = int(id_super_contexto) if id_super_contexto is not None else None
         
         for o in res_o:
             id_camp_oferta = o.get("id_campana")
-            # Validamos que no sea None ni vacío antes de convertir a entero
-            if id_camp_oferta is not None and str(id_camp_oferta).strip() != "":
+            id_super_oferta = o.get("id_super")
+            
+            if id_camp_oferta is not None and id_super_oferta is not None:
                 try:
-                    # Convertimos flotantes (ej: 1.0) o textos (ej: "1") a entero puro
-                    if int(float(id_camp_oferta)) == id_destino_int:
+                    # Filtramos por campaña AND por supermercado seleccionado
+                    if int(float(id_camp_oferta)) == id_destino_int and int(float(id_super_oferta)) == id_super_actual_int:
                         if o.get("id_producto"):
                             productos_en_campana_activa.add(str(o["id_producto"]).strip())
                 except (ValueError, TypeError):
-                    continue # Si un registro viene corrupto, lo salta en vez de romper la app
+                    continue
     except Exception as e:
-        st.error(f"⚠️ Error al procesar IDs de campaña: {e}")
+        st.error(f"⚠️ Error al procesar IDs de campaña en estadísticas: {e}")
+
+# Esto asignará el número correcto a la tarjeta de estadísticas superior automáticamente
+st.session_state.stat_seleccionados = len(productos_en_campana_activa)
 
 # LÍNEA TEMPORAL DE AUDITORÍA (Muestra cuántos productos detectó en la barra lateral)
 st.sidebar.write(f"🔍 SKUs detectados en campaña {id_campana_destino}: {len(productos_en_campana_activa)}")
@@ -317,6 +319,7 @@ with metric_col4: st.metric(label="✅ Incluidos en Campaña Activa", value=st.s
 # =====================================================================
 
 def dibujar_rejilla_mosaico_fiel(items_mosaico, _df_lab_activo, layout, _columnas_elegidas, _id_campana_destino, productos_campana=None):
+    # Si por alguna razón viene vacío, inicializamos un conjunto seguro
     if productos_campana is None:
         productos_campana = set()
         
@@ -335,7 +338,7 @@ def dibujar_rejilla_mosaico_fiel(items_mosaico, _df_lab_activo, layout, _columna
                 precio_defecto = float(fila_p.get("precio_oferta", 0.0))
                 id_activa_real = None
                 
-                # --- PASO 3: Marcar el botón incluir si el producto ya existe en la campaña activa ---
+                # --- PASO 3: El check se activa sólo si el producto está en el set filtrado ---
                 check_inicial = id_p_raw in productos_campana
                 
                 # Buscamos correspondencia básica en ofertas_activas para heredar precios proyectados
@@ -345,6 +348,7 @@ def dibujar_rejilla_mosaico_fiel(items_mosaico, _df_lab_activo, layout, _columna
                         fila_reciente = match_pizarra.tail(1)
                         precio_defecto = float(fila_reciente["precio_oferta_proyectado"].values[0])
                         id_activa_real = int(fila_reciente["id_oferta_activa"].values[0])
+
                 
                 # -------------------------------------------------------------
                 # El resto de tu código (CONSTRUCCIÓN DE INTERFAZ GRÁFICA HTML)
