@@ -111,16 +111,38 @@ with col_s1:
     id_super_contexto = st.selectbox("Supermercado Objetivo:", options=ids_supers_activos, format_func=lambda x: mapa_supers_ram.get(x, f"Super #{x}"))
 
 with col_s2:
+    # 1. INICIALIZA SIEMPRE LAS VARIABLES AL PRINCIPIO
+    campanas_filtradas = []
+    lista_ids_campanas = []
+    dict_campanas = {}
+
+    # 2. FILTRA LAS CAMPAÑAS (SI EXISTEN LAS CONDICIONES)
+    if res_c and st.session_state.get("id_super_operador"):
+        for c in res_c:
+            if int(c.get('id_super')) == int(st.session_state["id_super_operador"]):
+                campanas_filtradas.append(c)
+                
+        # Generas las listas y diccionarios solo si hubo campañas filtradas
+        lista_ids_campanas = [c['id_campana'] for c in campanas_filtradas]
+        dict_campanas = {
+            c['id_campana']: f"ID: {c['id_campana']} | {c['nombre_campana'].upper()} [{c['fecha_inicio']} al {c['fecha_fin']}]" 
+            for c in campanas_filtradas
+        }
+    
+    # 3. EL SELECTBOX YA NO FALLARÁ PORQUE LA LISTA SIEMPRE EXISTE (AUNQUE ESTÉ VACÍA)
     campana_destino_sel = st.selectbox(
         "📅 Campaña / Folleto Destino *:", 
         options=sorted(lista_ids_campanas), 
         format_func=lambda x: dict_campanas.get(x, f"ID: {x}"),
-        index=0 if lista_ids_campanas else None
+        index=0 if lista_ids_campanas else None,
+        disabled=not lista_ids_campanas # Opcional: deshabilita el selectbox si no hay opciones
     )
     
-    # SOLUCIÓN: campana_destino_sel YA es el ID de la campaña. Solo asegúrate de convertirlo a entero por seguridad.
+    # 4. ASIGNACIÓN CORRECTA DEL ID
+    id_campana_destino = None
     if campana_destino_sel:
         id_campana_destino = int(campana_destino_sel)
+
 
 with col_s5:
     columnas_elegidas = st.slider("Columnas por Fila (Densidad):", min_value=6, max_value=15, value=9, step=3)
