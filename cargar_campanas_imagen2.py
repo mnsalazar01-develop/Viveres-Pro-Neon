@@ -111,23 +111,16 @@ with col_s1:
     id_super_contexto = st.selectbox("Supermercado Objetivo:", options=ids_supers_activos, format_func=lambda x: mapa_supers_ram.get(x, f"Super #{x}"))
 
 with col_s2:
-    campanas_filtradas = []
-    if res_c and st.session_state["id_super_operador"]:
-        for c in res_c:
-            if int(c.get('id_super')) == int(st.session_state["id_super_operador"]):
-                campanas_filtradas.append(c)
-                
-    lista_ids_campanas = [c['id_campana'] for c in campanas_filtradas]
-    dict_campanas = {c['id_campana']: f"ID: {c['id_campana']} | {c['nombre_campana'].upper()} [{c['fecha_inicio']} al {c['fecha_fin']}]" for c in campanas_filtradas}
-    
     campana_destino_sel = st.selectbox(
         "📅 Campaña / Folleto Destino *:", 
         options=sorted(lista_ids_campanas), 
         format_func=lambda x: dict_campanas.get(x, f"ID: {x}"),
         index=0 if lista_ids_campanas else None
     )
+    
+    # SOLUCIÓN: campana_destino_sel YA es el ID de la campaña. Solo asegúrate de convertirlo a entero por seguridad.
     if campana_destino_sel:
-        id_campana_destino = int(campana_destino_sel["id_campana"])
+        id_campana_destino = int(campana_destino_sel)
 
 with col_s5:
     columnas_elegidas = st.slider("Columnas por Fila (Densidad):", min_value=6, max_value=15, value=9, step=3)
