@@ -282,12 +282,6 @@ if not df_laboratorio_activo.empty and not df_p.empty:
             if columnas_candidatas:
                 col_campana = columnas_candidatas[0]
 
-        # Si localizamos la columna y hay una campaña destino activa, filtramos y contamos los SKUs únicos
-        if col_campana and 'id_campana_destino' in locals() and id_campana_destino:
-            df_camp_activa = df_laboratorio_activo[df_laboratorio_activo[col_campana].astype(str) == str(id_campana_destino)]
-            st.session_state.stat_seleccionados = int(df_camp_activa["id_producto"].nunique())
-        else:
-            st.session_state.stat_seleccionados = 0
         
         # Ordenamiento visual alfabético estándar por pasillos
         df_lote_express["id_cat"] = df_lote_express["id_cat"].fillna(0).astype(int)
