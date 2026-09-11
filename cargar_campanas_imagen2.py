@@ -87,10 +87,6 @@ df_c = pd.DataFrame(res_c) if res_c else pd.DataFrame()
 mapa_supers_ram = {int(s["id_super"]): s["nombre_supermercado"] for s in res_s} if res_s else {}
 
 
-if not campanas_pre_oferta_global:
-    st.info("ℹ️ Por favor, cree primero una campaña en modo 'Pre-Oferta' para activar este laboratorio.")
-    st.stop()
-
 # POOL ACTUAL: RECONSTRUCCIÓN GENERAL DE HISTÓRICOS EN RAM
 df_pool_actual = pd.DataFrame()
 if not df_o.empty and not df_p.empty and not df_c.empty:
