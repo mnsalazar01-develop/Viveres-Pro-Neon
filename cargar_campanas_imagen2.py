@@ -126,7 +126,7 @@ with col_s2:
         format_func=lambda x: dict_campanas.get(x, f"ID: {x}"),
         index=0 if lista_ids_campanas else None
     )
-    id_campana_destino = int(campana_destino_sel["id_campana"])
+    #id_campana_destino = int(campana_destino_sel["id_campana"])
 
 with col_s5:
     columnas_elegidas = st.slider("Columnas por Fila (Densidad):", min_value=6, max_value=15, value=9, step=3)
