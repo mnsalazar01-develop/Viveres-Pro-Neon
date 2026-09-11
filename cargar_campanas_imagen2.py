@@ -197,16 +197,28 @@ df_pool_unicos = pd.DataFrame()
 # MODIFICACIÓN EN PARTE 3: OBTENCIÓN DE OFERTAS DE LA CAMPAÑA ACTIVA
 # =====================================================================
 
-# PASO 1: Creamos un set en memoria con los id_producto ya guardados en esta campaña
+# =====================================================================
+# PASO 1 CORREGIDO: FILTRADO ULTRA-SEGURO DE TIPOS DE DATOS
+# =====================================================================
 productos_en_campana_activa = set()
 
 if id_campana_destino and res_o:
-    # Filtramos la lista de ofertas crudas (res_o) por la campaña destino elegida
-    productos_en_campana_activa = {
-        str(o["id_producto"]).strip() 
-        for o in res_o 
-        if o.get("id_campana") and int(o["id_campana"]) == int(id_campana_destino)
-    }
+    try:
+        id_destino_int = int(id_campana_destino)
+        
+        for o in res_o:
+            id_camp_oferta = o.get("id_campana")
+            # Validamos que no sea None ni vacío antes de convertir a entero
+            if id_camp_oferta is not None and str(id_camp_oferta).strip() != "":
+                try:
+                    # Convertimos flotantes (ej: 1.0) o textos (ej: "1") a entero puro
+                    if int(float(id_camp_oferta)) == id_destino_int:
+                        if o.get("id_producto"):
+                            productos_en_campana_activa.add(str(o["id_producto"]).strip())
+                except (ValueError, TypeError):
+                    continue # Si un registro viene corrupto, lo salta en vez de romper la app
+    except Exception as e:
+        st.error(f"⚠️ Error al procesar IDs de campaña: {e}")
 
 # PASO 2: Cruzar con el conjunto creado proveniente de la tabla ofertas_activas
 if not df_laboratorio_activo.empty and not df_p.empty:
