@@ -86,8 +86,6 @@ df_p = pd.DataFrame(res_p) if res_p else pd.DataFrame()
 df_c = pd.DataFrame(res_c) if res_c else pd.DataFrame()
 mapa_supers_ram = {int(s["id_super"]): s["nombre_supermercado"] for s in res_s} if res_s else {}
 
-# Filtrado estricto de campañas en modo 'Pre-Oferta'
-campanas_pre_oferta_global = [c for c in res_c if str(c.get("estado_campana")).strip().lower() == "pre-oferta"]
 
 if not campanas_pre_oferta_global:
     st.info("ℹ️ Por favor, cree primero una campaña en modo 'Pre-Oferta' para activar este laboratorio.")
@@ -118,13 +116,20 @@ with col_s1:
     campanas_filtradas = [c for c in campanas_pre_oferta_global if int(c.get("id_super", 0)) == id_super_contexto]
 
 with col_s2:
-    if not campanas_filtradas:
-        st.error("No hay campañas en Pre-Oferta.")
-        st.stop()
+    campanas_filtradas = []
+    if res_c and st.session_state["id_super_operador"]:
+        for c in res_c:
+            if int(c.get('id_super')) == int(st.session_state["id_super_operador"]):
+                campanas_filtradas.append(c)
+                
+    lista_ids_campanas = [c['id_campana'] for c in campanas_filtradas]
+    dict_campanas = {c['id_campana']: f"ID: {c['id_campana']} | {c['nombre_campana'].upper()} [{c['fecha_inicio']} al {c['fecha_fin']}]" for c in campanas_filtradas}
+    
     campana_destino_sel = st.selectbox(
-        "Campaña Contenedora:",
-        options=campanas_filtradas,
-        format_func=lambda x: f"ID: {x['id_campana']} | {x['nombre_campana']}"
+        "📅 Campaña / Folleto Destino *:", 
+        options=sorted(lista_ids_campanas), 
+        format_func=lambda x: dict_campanas.get(x, f"ID: {x}"),
+        index=0 if lista_ids_campanas else None
     )
     id_campana_destino = int(campana_destino_sel["id_campana"])
 
