@@ -452,23 +452,25 @@ with col_btn1:
                     if id_final_super is None:
                         st.error("❌ No se pudo determinar el ID del supermercado para el producto. Operación abortada.")
                         continue
-        
-                    # 2. Inserción limpia en la tabla histórica oficial de ofertas
+                    # 2. Inserción limpia en la tabla histórica oficial de ofertas (Corregida sin tipo_oferta)
                     query_insert = """
                     INSERT INTO public.ofertas (
                         id_producto, id_super, precio_oferta, id_campana,
-                        id_sucursal, numero_pagina, posicion_slot, tipo_oferta,
+                        id_sucursal, numero_pagina, posicion_slot,
                         es_favorita, en_lista_compras, oferta_comprada
                     )
-                    VALUES (%s, %s, %s, %s, NULL, NULL, NULL, 'C', False, False, False);
+                    VALUES (%s, %s, %s, %s, NULL, NULL, NULL, False, False, False);
                     """
+                    
+                    # Pasamos los parámetros removiendo el argumento 'C' que correspondía a tipo_oferta
                     cur.execute(query_insert, (
                         reg["id_producto"],
-                        int(id_final_super),  # <--- ID garantizado sin riesgo de NoneType
+                        int(id_final_super),
                         reg["precio"],
                         id_campana_destino
                     ))
-                    
+
+                   
                     # 3. UPSERT en ofertas_activas: Sincroniza y actualiza la pizarra general
                     query_upsert_activa = """
                     INSERT INTO public.ofertas_activas (id_producto, id_super, precio_oferta_proyectado)
