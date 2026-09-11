@@ -292,26 +292,55 @@ def dibujar_rejilla_mosaico_fiel(items_mosaico, _df_lab_activo, layout, _columna
                 
                 # 2. INTENTO DE FILTRADO CRUZADO ESTRICTO EN LA PIZARRA GLOBAL
                 if not _df_lab_activo.empty:
+                    # Imprime temporalmente las columnas para auditar (puedes borrar esto después)
+                    # st.info(f"Columnas disponibles en la pizarra: {list(_df_lab_activo.columns)}")
+                    
                     # Detectamos el nombre real de la columna de campaña en la pizarra
-                    col_campana = "id_campana"
-                    for col in ["id_campana", "id_campana_destino", "id_camp_dest", "campana"]:
+                    col_campana = None
+                    for col in ["id_campana", "id_campana_destino", "id_camp_dest", "campana", "id_folleto"]:
                         if col in _df_lab_activo.columns:
                             col_campana = col
                             break
                     
-                    # Filtramos por Producto + Supermercado + Campaña Destino Seleccionada
-                    match_estricto = _df_lab_activo[
-                        (_df_lab_activo["id_producto"].astype(str).str.strip() == id_p_raw) &
-                        (_df_lab_activo["id_super"].astype(str).str.strip() == id_super_oferta) &
-                        (_df_lab_activo[col_campana].astype(str).str.strip() == id_camp_destino_str)
-                    ]
-                    
-                    # Si existe el registro exacto en la base de datos para esta campaña, se marca
-                    if not match_estricto.empty:
-                        fila_reciente = match_estricto.tail(1)
-                        precio_defecto = float(fila_reciente["precio_oferta_proyectado"].values[0])
-                        id_activa_real = int(fila_reciente["id_oferta_activa"].values[0])
-                        check_inicial = True
+                    # Si no encontró coincidencia exacta, busca cualquier columna que contenga "camp" o "foll"
+                    if not col_campana:
+                        columnas_candidatas = [c for c in _df_lab_activo.columns if "camp" in c.lower() or "foll" in c.lower()]
+                        if columnas_candidatas:
+                            col_campana = columnas_candidatas[0]
+
+                    # SÓLO FILTRAMOS SI ENCONTRAMOS UNA COLUMNA VÁLIDA
+                    if col_campana:
+                        try:
+                            # Filtramos por Producto + Supermercado + Campaña Destino Seleccionada
+                            match_estricto = _df_lab_activo[
+                                (_df_lab_activo["id_producto"].astype(str).str.strip() == id_p_raw) &
+                                (_df_lab_activo["id_super"].astype(str).str.strip() == id_super_oferta) &
+                                (_df_lab_activo[col_campana].astype(str).str.strip() == id_camp_destino_str)
+                            ]
+                            
+                            # Si existe el registro exacto en la base de datos para esta campaña, se marca
+                            if not match_estricto.empty:
+                                fila_reciente = match_estricto.tail(1)
+                                precio_defecto = float(fila_reciente["precio_oferta_proyectado"].values[0])
+                                id_activa_real = int(fila_reciente["id_oferta_activa"].values[0])
+                                check_inicial = True
+                        except Exception:
+                            # Si algo falla internamente en el filtro de Pandas, evitamos romper la app
+                            check_inicial = False
+                    else:
+                        # Si no hay columna de campaña, hacemos un filtro básico por producto y súper como respaldo
+                        try:
+                            match_basico = _df_lab_activo[
+                                (_df_lab_activo["id_producto"].astype(str).str.strip() == id_p_raw) &
+                                (_df_lab_activo["id_super"].astype(str).str.strip() == id_super_oferta)
+                            ]
+                            if not match_basico.empty:
+                                fila_reciente = match_basico.tail(1)
+                                precio_defecto = float(fila_reciente["precio_oferta_proyectado"].values[0])
+                                id_activa_real = int(fila_reciente["id_oferta_activa"].values[0])
+                        except Exception:
+                            pass
+
                 
                 # 3. CONSTRUCCIÓN DE INTERFAZ GRÁFICA (HTML & LAYOUT)
                 limite_caracteres = layout["trim"]
