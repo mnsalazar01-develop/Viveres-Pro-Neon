@@ -107,7 +107,7 @@ st.markdown("#### 1. Coordenadas de Entrada Comercial")
 col_s1, col_s2, col_s3, col_s4, col_s5 = st.columns([1.2, 1.4, 1.1, 1.1, 1.4])
 
 with col_s1:
-    ids_supers_activos = sorted(list(set([int(c["id_super"]) for c in campanas_pre_oferta_global if c.get("id_super") is not None])))
+    ids_supers_activos = sorted(list(set([int(c["id_super"])
     id_super_contexto = st.selectbox("Supermercado Objetivo:", options=ids_supers_activos, format_func=lambda x: mapa_supers_ram.get(x, f"Super #{x}"))
 
 with col_s2:
