@@ -220,6 +220,10 @@ if id_campana_destino and res_o:
     except Exception as e:
         st.error(f"⚠️ Error al procesar IDs de campaña: {e}")
 
+# LÍNEA TEMPORAL DE AUDITORÍA (Muestra cuántos productos detectó en la barra lateral)
+st.sidebar.write(f"🔍 SKUs detectados en campaña {id_campana_destino}: {len(productos_en_campana_activa)}")
+
+
 # PASO 2: Cruzar con el conjunto creado proveniente de la tabla ofertas_activas
 if not df_laboratorio_activo.empty and not df_p.empty:
     df_lab = df_laboratorio_activo.copy()
