@@ -116,8 +116,9 @@ with col_s2:
     lista_ids_campanas = []
     dict_campanas = {}
 
-    # 2. Obtenemos el ID del supermercado desde la sesión de forma segura
-    id_super_actual = st.session_state.get("id_super_operador")
+    # 2. CORRECCIÓN: Filtramos usando el supermercado seleccionado arriba (id_super_contexto)
+    # Si id_super_contexto está vacío, usamos por respaldo el de la sesión
+    id_super_actual = id_super_contexto if id_super_contexto is not None else st.session_state.get("id_super_operador")
 
     # 3. Filtramos de manera estricta asegurando que ambos IDs sean tratados como enteros
     if res_c and id_super_actual is not None:
@@ -139,6 +140,21 @@ with col_s2:
             c['id_campana']: f"ID: {c['id_campana']} | {c['nombre_campana'].upper()} [{c['fecha_inicio']} al {c['fecha_fin']}]" 
             for c in campanas_filtradas
         }
+    
+    # 5. Desplegamos el selectbox (aparecerá vacío o deshabilitado si no hay coincidencias)
+    campana_destino_sel = st.selectbox(
+        "📅 Campaña / Folleto Destino *:", 
+        options=sorted(lista_ids_campanas), 
+        format_func=lambda x: dict_campanas.get(x, f"ID: {x}"),
+        index=0 if lista_ids_campanas else None,
+        disabled=not lista_ids_campanas
+    )
+    
+    # 6. Asignamos el ID de la campaña seleccionada
+    id_campana_destino = None
+    if campana_destino_sel:
+        id_campana_destino = int(campana_destino_sel)
+
     
     # 5. Desplegamos el selectbox (aparecerá vacío o deshabilitado si no hay coincidencias)
     campana_destino_sel = st.selectbox(
