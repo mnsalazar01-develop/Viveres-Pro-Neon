@@ -262,18 +262,22 @@ def dibujar_rejilla_mosaico_fiel(items_mosaico, _df_lab_activo, layout, _columna
                 
                 id_activa_real = None
                 precio_defecto = float(fila_p.get("precio_oferta", 0.0))
-                check_inicial = False
+                check_inicial = False  # Por defecto arranca desmarcado
                 
                 if not match_pizarra.empty:
-                    fila_reciente = match_pizarra.tail(1)
-                    precio_defecto = float(fila_reciente["precio_oferta_proyectado"].values[0])
-                    id_activa_real = int(fila_reciente["id_oferta_activa"].values[0])
-                    # APLICACIÓN DE OPCIÓN 2: Lectura tolerante a fallos de inicialización del Scope
-                    id_operador_seguro = st.session_state.get("id_super_operador", 0)
+                    # Filtramos la pizarra para ver si este producto ya está guardado en la campaña destino seleccionada
+                    # NOTA: Asegúrate de que la columna en tu DataFrame se llame exactamente 'id_campana'
+                    match_campana = match_pizarra[match_pizarra["id_campana"].astype(str) == str(_id_campana_destino)]
                     
-                    # Si el producto pertenece a la cadena que estamos operando, se asume pre-incluido
-                    if int(fila_reciente["id_super"].values[0]) == int(id_operador_seguro):
-                        check_inicial = True               
+                    if not match_campana.empty:
+                        # Si hay coincidencia, tomamos el registro guardado en esa campaña
+                        fila_reciente = match_campana.tail(1)
+                        precio_defecto = float(fila_reciente["precio_oferta_proyectado"].values[0])
+                        id_activa_real = int(fila_reciente["id_oferta_activa"].values[0])
+                        
+                        # ¡CORRECCIÓN! Solo se marca si existía previamente en esta campaña destino
+                        check_inicial = True
+
                 # Ajuste dinámico de texto según slider de densidad
                 limite_caracteres = layout["trim"]
                 nombre_lbl = str(fila_p.get("nombre", "")).strip().upper()[:limite_caracteres]
