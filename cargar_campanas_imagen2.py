@@ -193,26 +193,38 @@ if "formulario_imagenes_dict" not in st.session_state: st.session_state["formula
 
 lista_items = []
 df_pool_unicos = pd.DataFrame()
+# =====================================================================
+# MODIFICACIÓN EN PARTE 3: OBTENCIÓN DE OFERTAS DE LA CAMPAÑA ACTIVA
+# =====================================================================
 
-# 2. ALGORITMO CRUZADO DE DESDUPLICACIÓN JERÁRQUICA
+# PASO 1: Creamos un set en memoria con los id_producto ya guardados en esta campaña
+productos_en_campana_activa = set()
+
+if id_campana_destino and res_o:
+    # Filtramos la lista de ofertas crudas (res_o) por la campaña destino elegida
+    productos_en_campana_activa = {
+        str(o["id_producto"]).strip() 
+        for o in res_o 
+        if o.get("id_campana") and int(o["id_campana"]) == int(id_campana_destino)
+    }
+
+# PASO 2: Cruzar con el conjunto creado proveniente de la tabla ofertas_activas
 if not df_laboratorio_activo.empty and not df_p.empty:
     df_lab = df_laboratorio_activo.copy()
     
     # Marcamos temporalmente cuáles registros pertenecen al Líder actual para la jerarquía
     df_lab["es_del_lider"] = df_lab["id_super"].fillna(0).astype(int) == int(id_super_contexto)
     
-    # ORDENAMIENTO DE PRIORIDAD ESTRATÉGICA:
-    # Primero ponemos los del Líder (True va antes que False si ordenamos descendente)
-    # Si ninguno es del Líder, se ordena por la fecha de actualización más nueva (updated_at)
+    # ORDENAMIENTO DE PRIORIDAD ESTRATÉGICA
     df_lab_ordenado = df_lab.sort_values(
-        by=["id_producto", "es_del_lider", "updated_at"], 
+        by=["id_producto", "es_del_lider", "updated_at"],
         ascending=[True, False, False]
     )
     
-    # ELIMINACIÓN DE DUPLICADOS: Conserva estrictamente el primer registro de cada producto (Aplica tu regla)
+    # ELIMINACIÓN DE DUPLICADOS: Conserva estrictamente el primer registro de cada producto
     df_lab_limpio = df_lab_ordenado.drop_duplicates(subset=["id_producto"], keep="first").copy()
     
-    # 3. CRUCE CON MAESTRO DE PRODUCTOS
+    # CRUCE CON MAESTRO DE PRODUCTOS
     df_prod = df_p.copy()
     df_prod["id_producto"] = df_prod["id_producto"].astype(str).str.strip()
     
@@ -227,6 +239,18 @@ if not df_laboratorio_activo.empty and not df_p.empty:
         st.session_state.stat_lider = int(df_lote_express["es_local"].sum())
         st.session_state.stat_otros = st.session_state.stat_total - st.session_state.stat_lider
         
+        # INTEGRACIÓN DE ESTADÍSTICAS: Total de productos seleccionados de la campaña activa
+        st.session_state.stat_seleccionados = len(productos_en_campana_activa)
+        
+        # Ordenamiento visual alfabético estándar por pasillos
+        df_lote_express["id_cat"] = df_lote_express["id_cat"].fillna(0).astype(int)
+        df_lote_express["id_subcat"] = df_lote_express["id_subcat"].fillna(0).astype(int)
+        df_lote_express["nombre_sort"] = df_lote_express["nombre"].fillna("").astype(str).str.strip().str.lower()
+        
+        df_pool_unicos = df_lote_express.sort_values(by=["id_cat", "id_subcat", "nombre_sort"], ascending=[True, True, True])
+        lista_items = df_pool_unicos.to_dict(orient="records")
+
+
         # --- CÁLCULO DE PRODUCTOS SELECCIONADOS DE LA CAMPAÑA ACTIVA ---
         # Buscamos de forma segura el nombre de la columna para la campaña en el df global
         col_campana = None
@@ -272,9 +296,15 @@ with metric_col4: st.metric(label="✅ Incluidos en Campaña Activa", value=st.s
 # PROGRAMA: registro_ofertas_mosaico_fiel.py | PARTE 5 DE 5
 # MODULO: INTERFAZ DINÁMICA DE PASILLOS Y PERSISTENCIA CORPORATIVA (UPSERT)
 # =====================================================================
-def dibujar_rejilla_mosaico_fiel(items_mosaico, _df_lab_activo, layout, _columnas_elegidas, _id_campana_destino):
+# =====================================================================
+# MODIFICACIÓN EN PARTE 4: AGREGAR PARÁMETRO Y PASO 3 DE MARCADO
+# =====================================================================
+
+def dibujar_rejilla_mosaico_fiel(items_mosaico, _df_lab_activo, layout, _columnas_elegidas, _id_campana_destino, productos_campana=None):
+    if productos_campana is None:
+        productos_campana = set()
+        
     COLUMNAS_POR_FILA = _columnas_elegidas
-    
     for i in range(0, len(items_mosaico), COLUMNAS_POR_FILA):
         bloque_items = items_mosaico[i:i + COLUMNAS_POR_FILA]
         columnas_ui = st.columns(COLUMNAS_POR_FILA)
@@ -288,61 +318,22 @@ def dibujar_rejilla_mosaico_fiel(items_mosaico, _df_lab_activo, layout, _columna
                 
                 precio_defecto = float(fila_p.get("precio_oferta", 0.0))
                 id_activa_real = None
-                check_inicial = False  # Por defecto arranca desmarcado
                 
-                # 2. INTENTO DE FILTRADO CRUZADO ESTRICTO EN LA PIZARRA GLOBAL
+                # --- PASO 3: Marcar el botón incluir si el producto ya existe en la campaña activa ---
+                check_inicial = id_p_raw in productos_campana
+                
+                # Buscamos correspondencia básica en ofertas_activas para heredar precios proyectados
                 if not _df_lab_activo.empty:
-                    # Imprime temporalmente las columnas para auditar (puedes borrar esto después)
-                    # st.info(f"Columnas disponibles en la pizarra: {list(_df_lab_activo.columns)}")
-                    
-                    # Detectamos el nombre real de la columna de campaña en la pizarra
-                    col_campana = None
-                    for col in ["id_campana", "id_campana_destino", "id_camp_dest", "campana", "id_folleto"]:
-                        if col in _df_lab_activo.columns:
-                            col_campana = col
-                            break
-                    
-                    # Si no encontró coincidencia exacta, busca cualquier columna que contenga "camp" o "foll"
-                    if not col_campana:
-                        columnas_candidatas = [c for c in _df_lab_activo.columns if "camp" in c.lower() or "foll" in c.lower()]
-                        if columnas_candidatas:
-                            col_campana = columnas_candidatas[0]
-
-                    # SÓLO FILTRAMOS SI ENCONTRAMOS UNA COLUMNA VÁLIDA
-                    if col_campana:
-                        try:
-                            # Filtramos por Producto + Supermercado + Campaña Destino Seleccionada
-                            match_estricto = _df_lab_activo[
-                                (_df_lab_activo["id_producto"].astype(str).str.strip() == id_p_raw) &
-                                (_df_lab_activo["id_super"].astype(str).str.strip() == id_super_oferta) &
-                                (_df_lab_activo[col_campana].astype(str).str.strip() == id_camp_destino_str)
-                            ]
-                            
-                            # Si existe el registro exacto en la base de datos para esta campaña, se marca
-                            if not match_estricto.empty:
-                                fila_reciente = match_estricto.tail(1)
-                                precio_defecto = float(fila_reciente["precio_oferta_proyectado"].values[0])
-                                id_activa_real = int(fila_reciente["id_oferta_activa"].values[0])
-                                check_inicial = True
-                        except Exception:
-                            # Si algo falla internamente en el filtro de Pandas, evitamos romper la app
-                            check_inicial = False
-                    else:
-                        # Si no hay columna de campaña, hacemos un filtro básico por producto y súper como respaldo
-                        try:
-                            match_basico = _df_lab_activo[
-                                (_df_lab_activo["id_producto"].astype(str).str.strip() == id_p_raw) &
-                                (_df_lab_activo["id_super"].astype(str).str.strip() == id_super_oferta)
-                            ]
-                            if not match_basico.empty:
-                                fila_reciente = match_basico.tail(1)
-                                precio_defecto = float(fila_reciente["precio_oferta_proyectado"].values[0])
-                                id_activa_real = int(fila_reciente["id_oferta_activa"].values[0])
-                        except Exception:
-                            pass
-
+                    match_pizarra = _df_lab_activo[_df_lab_activo["id_producto"].astype(str).str.strip() == id_p_raw]
+                    if not match_pizarra.empty:
+                        fila_reciente = match_pizarra.tail(1)
+                        precio_defecto = float(fila_reciente["precio_oferta_proyectado"].values[0])
+                        id_activa_real = int(fila_reciente["id_oferta_activa"].values[0])
                 
-                # 3. CONSTRUCCIÓN DE INTERFAZ GRÁFICA (HTML & LAYOUT)
+                # -------------------------------------------------------------
+                # El resto de tu código (CONSTRUCCIÓN DE INTERFAZ GRÁFICA HTML)
+                # permanece exactamente igual hasta llegar al checkbox...
+                # -------------------------------------------------------------
                 limite_caracteres = layout["trim"]
                 nombre_lbl = str(fila_p.get("nombre", "")).strip().upper()[:limite_caracteres]
                 marca_lbl = str(fila_p.get("marca", "Sin Marca")).strip()[:10]
@@ -363,16 +354,13 @@ def dibujar_rejilla_mosaico_fiel(items_mosaico, _df_lab_activo, layout, _columna
                     st.image(url_foto_render, use_container_width=True)
                     st.markdown(html_especificacion, unsafe_allow_html=True)
                     
-                    # Sanitización de llaves de control para la memoria RAM de Streamlit
                     id_sanitizado = id_p_raw.replace(" ", "_")
                     p_key_string = f"num_pvp_{id_sanitizado}_{id_super_oferta}_{id_camp_destino_str}"
                     m_key_string = f"chk_load_{id_sanitizado}_{id_super_oferta}_{id_camp_destino_str}"
                     
-                    # Render de controles interactivos con el estado correcto reflejado
                     st.number_input("PVP ($):", min_value=0.0, value=precio_defecto, step=0.01, format="%.2f", key=p_key_string)
-                    st.checkbox("Incluir", value=check_inicial, key=m_key_string)
+                    st.checkbox("Incluir", value=check_inicial, key=m_key_string) # <-- Ahora usa check_inicial sin riesgo de KeyError
                                      
-                    # Persistencia interna en el diccionario del formulario
                     st.session_state["formulario_imagenes_dict"][id_p_raw] = {
                         "id_registro": id_activa_real,
                         "id_producto": id_p_raw,
@@ -400,7 +388,7 @@ if form_categorias:
                 
             if items_finales_mosaico:
                 st.caption(f"Mostrando {len(items_finales_mosaico)} artículos en este segmento")
-                dibujar_rejilla_mosaico_fiel(items_finales_mosaico, df_laboratorio_activo, layout_dinamico, columnas_elegidas, id_campana_destino)
+                dibujar_rejilla_mosaico_fiel(items_finales_mosaico, df_laboratorio_activo, layout_dinamico, columnas_elegidas, id_campana_destino, productos_en_campana_activa)
             else:
                 st.info("No hay productos registrados con ofertas activas en este segmento.")
 
