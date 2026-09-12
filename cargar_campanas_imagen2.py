@@ -140,14 +140,23 @@ with col_s2:
             c['id_campana']: f"ID: {c['id_campana']} | {c['nombre_campana'].upper()} [{c['fecha_inicio']} al {c['fecha_fin']}]" 
             for c in campanas_filtradas
         }
-    
+    # =====================================================================
+    # MODIFICACIÓN EN PARTE 2: CALLBACK PARA RESETEAR MEMORIA AL CAMBIAR DE CAMPAÑA
+    # =====================================================================
+    def limpiar_memoria_por_cambio_campana():
+        # Vaciamos por completo los almacenes en RAM para forzar la recarga desde la BD
+        st.session_state["marcador_temporal_checks"] = {}
+        st.session_state["formulario_imagenes_dict"] = {}
+
     # 5. Desplegamos el selectbox (aparecerá vacío o deshabilitado si no hay coincidencias)
     campana_destino_sel = st.selectbox(
         "📅 Campaña:", 
         options=sorted(lista_ids_campanas), 
         format_func=lambda x: dict_campanas.get(x, f"ID: {x}"),
         index=0 if lista_ids_campanas else None,
-        disabled=not lista_ids_campanas
+        disabled=not lista_ids_campanas,
+        key="sb_campana_destino",
+        on_change=limpiar_memoria_por_cambio_campana
     )
     
     # 6. Asignamos el ID de la campaña seleccionada
