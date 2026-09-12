@@ -104,7 +104,7 @@ if not df_o.empty and not df_p.empty and not df_c.empty:
 
 # RENDERIZADO DE COORDENADAS SUPERIORES (INTERFAZ VISUAL)
 st.markdown("#### 1. Coordenadas de Entrada Comercial")
-col_s1, col_s2, col_s3, col_s4, col_s5 = st.columns([1.2, 1.9, 1.1, 1.1, 1.1])
+col_s1, col_s2, col_s3, col_s4 = st.columns([1.2, 1.9, 1.1, 1.1])
 
 with col_s1:
     ids_supers_activos = {s.get('id_super'): s.get('nombre_supermercado') for s in res_s if s.get('id_super')}
@@ -156,7 +156,7 @@ with col_s2:
         id_campana_destino = int(campana_destino_sel)
 
     
-with col_s5:
+with col_s4:
     columnas_elegidas = st.slider("Columnas por Fila (Densidad):", min_value=6, max_value=12, value=6, step=2)
     config_zoom = {
         6: {"altura_px": 85, "font_b": "0.72rem", "font_span": "0.62rem", "trim": 20},
