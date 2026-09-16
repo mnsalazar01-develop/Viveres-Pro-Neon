@@ -1,6 +1,7 @@
 # ==============================================================================
 # PROGRAMA: registro_ofertas_mosaico_fiel.py | PARTE 1 DE 5
 # MODULO: CONFIGURACIÓN GENERAL, ESTILOS E INICIALIZACIÓN CORE NEON
+# PROGRAMA DUPLICADO: VERSION VIGENTE cargar_campanas_imagen2.py
 # ==============================================================================
 import streamlit as st
 import pandas as pd
