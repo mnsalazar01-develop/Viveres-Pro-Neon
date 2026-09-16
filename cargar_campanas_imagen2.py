@@ -72,7 +72,7 @@ try:
     """
     res_p = ejecutar_consulta_neon(query_prod) or []
     res_s = ejecutar_consulta_neon("SELECT id_super, nombre_supermercado FROM public.supermercados;") or []
-    res_c = ejecutar_consulta_neon("SELECT id_campana, id_super, nombre_campana, estado_campana, fecha_inicio, fecha_fin FROM public.campanas;") or []
+    res_c = ejecutar_consulta_neon("SELECT id_campana, id_super, nombre_campana, estado_campana, fecha_inicio, fecha_fin, disponible FROM public.campanas where disponinle = true;") or []
     form_categorias = ejecutar_consulta_neon("SELECT id_cat, nombre FROM public.categorias ORDER BY nombre;") or []
     form_subcategorias = ejecutar_consulta_neon("SELECT id_subcat, id_cat, nombre FROM public.subcategorias ORDER BY nombre;") or []
 
