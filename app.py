@@ -49,6 +49,7 @@ pagina_oferta_visual = st.Page("cargar_oferta_visual.py", title="Cargar Oferta V
 pagina_oferta_activa = st.Page("carga_inicial_oferta_activa.py", title="Carga Inicial Ofertas", icon="⚙️")
 pagina_maqueta = st.Page("maquetacion.py", title="Maquetacion", icon="⚙️")
 pagina_ofertas = st.Page("ofertas.py", title="Ingresar Ofertas", icon="⚙️")
+pagina_sincronizar = st.Page("sincronizar_productos.py", title="Sincronizar Productos", icon="⚙️")
 # 4. CONSTRUCCIÓN AUTOMÁTICA DEL MOTOR DE NAVEGACIÓN EN LA BARRA LATERAL
 enrutador_global = st.navigation([
     pagina_inicio,
@@ -64,6 +65,7 @@ enrutador_global = st.navigation([
     pagina_oferta_activa,
     pagina_oferta_visual,
     pagina_ofertas,
+    pagina_sincronizar,
     pagina_datos
     
 ])
