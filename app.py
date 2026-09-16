@@ -41,6 +41,7 @@ pagina_intelig = st.Page("asociacion_inteligente.py", title="Asociar Imagen Plus
 pagina_grillap = st.Page("grilla_productos.py", title="Grilla Productos", icon="📤")
 pagina_campana = st.Page("dashboard_campanas.py", title="Dashboard Campañas", icon="📤")
 pagina_productos = st.Page("grilla_productos2.py", title="Grilla Productos Plus", icon="📤")
+pagina_sincronizar = st.Page("sincronizar_productos.py", title="Sincronizar Productos", icon="⚙️")
 pagina_carga_masiva = st.Page("carga_masiva_imagen.py", title="Carga Masiva Imagen", icon="📤")
 pagina_cargar_imagen = st.Page("cargar_campanas_imagen.py", title="📋 Cargar Imagen", icon="📋")
 pagina_cargar21 = st.Page("cargar_campanas_imagen2.py", title="📋 Cargar Imagen 2", icon="📋")
@@ -49,7 +50,6 @@ pagina_oferta_visual = st.Page("cargar_oferta_visual.py", title="Cargar Oferta V
 pagina_oferta_activa = st.Page("carga_inicial_oferta_activa.py", title="Carga Inicial Ofertas", icon="⚙️")
 pagina_maqueta = st.Page("maquetacion.py", title="Maquetacion", icon="⚙️")
 pagina_ofertas = st.Page("ofertas.py", title="Ingresar Ofertas", icon="⚙️")
-pagina_sincronizar = st.Page("sincronizar_productos.py", title="Sincronizar Productos", icon="⚙️")
 # 4. CONSTRUCCIÓN AUTOMÁTICA DEL MOTOR DE NAVEGACIÓN EN LA BARRA LATERAL
 enrutador_global = st.navigation([
     pagina_inicio,
