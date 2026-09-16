@@ -7,7 +7,7 @@ st.title("🔄 Sincronizador de Productos - Neon")
 
 # 1. Obtener de forma segura la URL de conexión desde los Secrets
 try:
-    URL_NEON = st.secrets["NEON_URL"]
+    URL_NEON = st.secrets["neon"]["url"]
 except KeyError:
     st.error("❌ No se encontró la variable 'NEON_URL' en los Secrets de Streamlit.")
     st.stop()
