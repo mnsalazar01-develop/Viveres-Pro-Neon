@@ -263,6 +263,11 @@ elif opcion_menu == "⚙️ Editor de Campañas":
             "Estado Maqueta",
             options=["En espera", "Activa", "Cerrada"],
             required=False
+        ),
+        "disponible": st.column_config.CheckboxColumn(
+            "Disponible",
+            help="Marca si la campaña está habilitada para operaciones",
+            default=True
         )
     }
 
@@ -290,6 +295,10 @@ elif opcion_menu == "⚙️ Editor de Campañas":
                 id_campana_target = int(fila_original["id_campana"])
                 
                 # Fusión de datos (valor editado en celda o valor persistente original)
+                # Evaluamos de forma segura el booleano convirtiéndolo directamente
+                disponible_val = campos_modificados.get("disponible", fila_original.get("disponible", True))
+                disponible_bool = bool(disponible_val) if pd.notna(disponible_val) else True
+
                 valores_update = (
                     int(campos_modificados.get("id_super", fila_original["id_super"])),
                     str(campos_modificados.get("nombre_campana", fila_original["nombre_campana"])),
@@ -300,6 +309,7 @@ elif opcion_menu == "⚙️ Editor de Campañas":
                     str(campos_modificados.get("mes", fila_original["mes"])) if pd.notna(campos_modificados.get("mes", fila_original["mes"])) else None,
                     str(campos_modificados.get("estado_carga", fila_original["estado_carga"])) if pd.notna(campos_modificados.get("estado_carga", fila_original["estado_carga"])) else None,
                     str(campos_modificados.get("estado_maqueta", fila_original["estado_maqueta"])) if pd.notna(campos_modificados.get("estado_maqueta", fila_original["estado_maqueta"])) else None,
+                    disponible_bool,
                     id_campana_target
                 )
                 
@@ -314,7 +324,8 @@ elif opcion_menu == "⚙️ Editor de Campañas":
                         estado_campana = %s, 
                         mes = %s, 
                         estado_carga = %s, 
-                        estado_maqueta = %s
+                        estado_maqueta = %s,
+                        disponible = %s
                     WHERE id_campana = %s;
                 """
                 
