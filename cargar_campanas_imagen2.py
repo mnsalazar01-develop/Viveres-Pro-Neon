@@ -325,11 +325,14 @@ with metric_col4: st.metric(label="✅ Incluidos en Campaña Activa", value=st.s
 # =====================================================================
 # MODIFICACIÓN EN PARTE 4: AGREGAR PARÁMETRO Y PASO 3 DE MARCADO
 # =====================================================================
-def dibujar_rejilla_mosaico_fiel(items_mosaico, _df_lab_activo, layout, _columnas_elegidas, _id_campana_destino, productos_campana=None):
+def dibujar_rejilla_mosaico_fiel(items_mosaico, _df_lab_activo, layout, _columnas_elegidas, _id_campana_destino, productos_campana=None, res_o=None):
     if productos_campana is None:
         productos_campana = set()
+    if res_o is None:
+        res_o = []
         
     COLUMNAS_POR_FILA = _columnas_elegidas
+    
     for i in range(0, len(items_mosaico), COLUMNAS_POR_FILA):
         bloque_items = items_mosaico[i:i + COLUMNAS_POR_FILA]
         columnas_ui = st.columns(COLUMNAS_POR_FILA)
@@ -340,27 +343,43 @@ def dibujar_rejilla_mosaico_fiel(items_mosaico, _df_lab_activo, layout, _columna
                 id_super_oferta = str(fila_p.get("id_super", "")).strip()
                 id_camp_destino_str = str(_id_campana_destino).strip()
                 
+                # 1. Intentar obtener el precio base heredado del ítem del mosaico
                 precio_defecto = float(fila_p.get("precio_oferta", 0.0))
                 id_activa_real = None
                 
+                # --- NUEVA LÓGICA: EXTRAER PRECIO GUARDADO EN LA OFERTA HISTÓRICA ---
+                # Si el producto está incluido en la campaña, buscamos su precio real guardado
+                if id_p_raw in productos_campana and res_o:
+                    for o in res_o:
+                        id_camp_oferta = str(o.get("id_campana", "")).strip()
+                        id_super_oferta_o = str(o.get("id_super", "")).strip()
+                        id_prod_oferta = str(o.get("id_producto", "")).strip()
+                        
+                        if id_prod_oferta == id_p_raw and id_super_oferta_o == id_super_oferta and id_camp_oferta == id_camp_destino_str:
+                            if o.get("precio_oferta") is not None:
+                                precio_defecto = float(o["precio_oferta"])
+                            break
+
                 # --- LÓGICA DE PERSISTENCIA EN MEMORIA ENTRE PASILLOS ---
-                # Si el producto ya fue modificado temporalmente en esta sesión, recuperamos ese estado
+                # Si el usuario ya lo modificó en la sesión actual, impera la RAM sobre la BD
                 if id_p_raw in st.session_state["marcador_temporal_checks"]:
                     check_inicial = st.session_state["marcador_temporal_checks"][id_p_raw]["marcado"]
                     precio_defecto = st.session_state["marcador_temporal_checks"][id_p_raw]["precio"]
                 else:
-                    # Si no ha sido tocado en esta sesión, heredamos si ya existía en la BD para esta campaña
+                    # Si no se ha tocado en la sesión, verificamos si ya existía en la campaña
                     check_inicial = id_p_raw in productos_campana
                     
-                    # Buscamos correspondencia en la pizarra para extraer su precio sugerido base
+                    # Si no ha sido tocado, pero existe en la pizarra activa, actualizamos precio de proyección
                     if not _df_lab_activo.empty:
                         match_pizarra = _df_lab_activo[_df_lab_activo["id_producto"].astype(str).str.strip() == id_p_raw]
                         if not match_pizarra.empty:
-                            fila_reciente = match_pizarra.tail(1)
-                            precio_defecto = float(fila_reciente["precio_oferta_proyectado"].values[0])
-                            id_activa_real = int(fila_reciente["id_oferta_activa"].values[0])
+                            fila_recent = match_pizarra.tail(1)
+                            # Si NO tiene oferta guardada en la campaña, usamos el proyectado
+                            if id_p_raw not in productos_campana:
+                                precio_defecto = float(fila_recent["precio_oferta_proyectado"].values[0])
+                            id_activa_real = int(fila_recent["id_oferta_activa"].values[0])
                 
-                # Renderizado HTML (Mantenemos tu diseño idéntico)
+                # --- RENDERIZADO HTML ---
                 limite_caracteres = layout["trim"]
                 nombre_lbl = str(fila_p.get("nombre", "")).strip().upper()[:limite_caracteres]
                 marca_lbl = str(fila_p.get("marca", "Sin Marca")).strip()[:10]
@@ -370,7 +389,7 @@ def dibujar_rejilla_mosaico_fiel(items_mosaico, _df_lab_activo, layout, _columna
                 html_especificacion = f"""
                 <b style='font-size: {layout["font_b"]}; color:#cdd6f4;'>{nombre_lbl}{sufijo_lider}</b><br>
                 <div style='line-height:1.1; margin-bottom:4px; height: 42px; overflow: hidden;'>
-                    <span style='font-size: {layout["font_span"]}; color: #a6adc8;'>{marca_lbl} | {formato_empaque}</span>
+                <span style='font-size: {layout["font_span"]}; color: #a6adc8;'>{marca_lbl} | {formato_empaque}</span>
                 </div>
                 """
                 
@@ -381,21 +400,18 @@ def dibujar_rejilla_mosaico_fiel(items_mosaico, _df_lab_activo, layout, _columna
                     st.markdown(html_especificacion, unsafe_allow_html=True)
                     
                     id_sanitizado = id_p_raw.replace(" ", "_")
-                    p_key_string = f"num_pvp_{id_sanitizado}_{id_super_oferta}_{id_camp_destino_str}"
                     m_key_string = f"chk_load_{id_sanitizado}_{id_super_oferta}_{id_camp_destino_str}"
                     
-                    # Guardamos el mapeo base en session_state para saber que este artículo existe en pantalla
                     st.session_state["formulario_imagenes_dict"][id_p_raw] = {
                         "id_registro": id_activa_real,
                         "id_producto": id_p_raw,
                         "id_super": id_super_oferta
                     }
                     
-                    # Capturamos la interacción del usuario y la guardamos en caliente en la memoria persistente
-                    input_precio = st.number_input("PVP ($):", min_value=0.0, value=precio_defecto, step=0.01, format="%.2f", key=p_key_string)
+                    # Despliegue de Inputs con el precio de la oferta inyectado
+                    input_precio = st.number_input("PVP ($):", min_value=0.0, value=precio_defecto, step=0.01, format="%.2f", key=f"num_pvp_{id_sanitizado}_{id_super_oferta}_{id_camp_destino_str}")
                     input_check = st.checkbox("Incluir", value=check_inicial, key=m_key_string)
                     
-                    # Cada vez que el usuario mueva algo, se actualiza el marcador temporal sin necesidad de guardar
                     st.session_state["marcador_temporal_checks"][id_p_raw] = {
                         "id_producto": id_p_raw,
                         "id_super": id_super_oferta,
@@ -403,6 +419,7 @@ def dibujar_rejilla_mosaico_fiel(items_mosaico, _df_lab_activo, layout, _columna
                         "precio": input_precio,
                         "id_registro": id_activa_real
                     }
+
 
 if form_categorias:
     nombres_pestanas = [cat["nombre"].upper() for cat in form_categorias]
@@ -424,7 +441,7 @@ if form_categorias:
                 
             if items_finales_mosaico:
                 st.caption(f"Mostrando {len(items_finales_mosaico)} artículos en este segmento")
-                dibujar_rejilla_mosaico_fiel(items_finales_mosaico, df_laboratorio_activo, layout_dinamico, columnas_elegidas, id_campana_destino, productos_en_campana_activa)
+                dibujar_rejilla_mosaico_fiel(items_finales_mosaico, df_laboratorio_activo, layout_dinamico, columnas_elegidas, id_campana_destino, productos_en_campana_activa, res_o=res_o)  
             else:
                 st.info("No hay productos registrados con ofertas activas en este segmento.")
 
