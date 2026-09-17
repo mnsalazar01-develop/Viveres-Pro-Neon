@@ -667,16 +667,4 @@ else:
                     st.cache_data.clear()
                     st.rerun()
 
-# --- REEMPLAZO EN TU BARRA LATERAL (AL FINAL DEL ARCHIVO) ---
-with st.sidebar:
-    st.markdown("### ⚙️ Modos de Operación")
-    # Creamos la opción para alternar entre el Mosaico Visual y las Agrupaciones
-    modo_operacion = st.radio(
-        "Selecciona el método de carga:",
-        ["🖼️ Mosaico Fiel Estándar", "📦 Inyector por Agrupaciones (Packs)"]
-    )
-    
-    st.write("---")
-    st.markdown("### Centro de Control")
-    st.info(f"**Ámbito:** Corporativo\n\n**Mosaico:** {'Fiel Activo' if modo_operacion == '🖼️ Mosaico Fiel Estándar' else 'Packs de Carga'}\n\n**Neon Status:** Conectado")
 
