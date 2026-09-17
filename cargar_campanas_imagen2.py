@@ -420,6 +420,85 @@ def dibujar_rejilla_mosaico_fiel(items_mosaico, _df_lab_activo, layout, _columna
                         "id_registro": id_activa_real
                     }
 
+# --- BUSCA DONDE INICIA EL RENDER DE PESTAÑAS/PASILLOS ---
+if modo_operacion == "🖼️ Mosaico Fiel Estándar":
+    # =========================================================================
+    # TODO TU CÓDIGO ORIGINAL DESDE AQUÍ (Pestañas, Rejilla, Mosaico y Botones Corporativos)
+    # =========================================================================
+    if form_categorias:
+        nombres_pestanas = [cat["nombre"].upper() for cat in form_categorias]
+        pestanas_ui = st.tabs(nombres_pestanas)
+        # ... (Mantén intacto todo tu bloque de código del mosaico hasta el final del reset de pizarra)
+        
+else:
+    # =========================================================================
+    # 📦 MÓDULO NUEVO: INYECTOR EXPRESS POR AGRUPACIONES (PACKS)
+    # =========================================================================
+    st.markdown("### 📦 Inyección Masiva por Agrupación de Productos")
+    st.caption("Esta herramienta inyecta un listado predefinido de SKUs directamente en la campaña y supermercado seleccionados arriba.")
+    
+    # 1. Validaciones de contexto de coordenadas comerciales superiores
+    if not id_campana_destino or id_super_contexto is None:
+        st.warning("⚠️ Por favor, selecciona primero un **Supermercado** y una **Campaña** en las coordenadas superiores.")
+    else:
+        # 2. Descarga de Catálogos de Packs y Componentes
+        res_packs = ejecutar_consulta_neon("SELECT id_producto, nombre FROM public.productos WHERE es_pack = TRUE ORDER BY nombre ASC;") or []
+        
+        if not res_packs:
+            st.info("ℹ️ No se encontraron agrupaciones de productos registradas en la tabla `public.productos` (con `es_pack = true`).")
+        else:
+            col_pk1, col_pk2 = st.columns(2)
+            
+            with col_pk1:
+                # Diccionario de lectura limpia para el selectbox
+                dict_packs = {p['id_producto']: p['nombre'] for p in res_packs}
+                pack_seleccionado = st.selectbox(
+                    "Selecciona la Agrupación (Pack) a cargar:",
+                    options=list(dict_packs.keys()),
+                    format_func=lambda x: dict_packs.get(x)
+                )
+            
+            with col_pk2:
+                st.markdown("**📋 Productos incluidos en esta plantilla:**")
+                res_componentes = ejecutar_consulta_neon("""
+                    SELECT p.nombre, p.marca, p.tamano, p.unidad, pc.cantidad 
+                    FROM public.pack_componentes pc
+                    JOIN public.productos p ON pc.id_producto_real = p.id_producto
+                    WHERE pc.id_pack = %s;
+                """, (pack_seleccionado,)) or []
+                
+                if res_componentes:
+                    for comp in res_componentes:
+                        st.markdown(f"- **{comp['nombre']}** ({comp['marca']}) - *Cant: {comp['cantidad']}*")
+                else:
+                    st.caption("Esta agrupación no contiene componentes asignados en la tabla `pack_componentes`.")
+            
+            st.write("---")
+            
+            # 3. Botón de Inyección Relacional Automática en Lote
+            if st.button("⚡ Ejecutar Carga Masiva de la Agrupación", type="primary", use_container_width=True):
+                # Consulta SQL optimizada en base a tu CONSTRAINT "unique_producto_super_campana"
+                query_insert_lote = """
+                    INSERT INTO public.ofertas (id_campana, id_super, id_producto, precio_oferta, es_favorita, en_lista_compras, oferta_comprada)
+                    SELECT %s, %s, id_producto_real, 0.0, False, False, False
+                    FROM public.pack_componentes 
+                    WHERE id_pack = %s
+                    ON CONFLICT ON CONSTRAINT unique_producto_super_campana DO NOTHING;
+                """
+                
+                # Ejecutamos la consulta usando tu motor nativo
+                resultado_accion = ejecutar_consulta_neon(
+                    query_insert_lote, 
+                    (int(id_campana_destino), int(id_super_contexto), pack_seleccionado), 
+                    fetch=False, 
+                    commit=True
+                )
+                
+                if resultado_accion:
+                    st.success("🎉 ¡Agrupación procesada correctamente! Los productos se han vinculado a la campaña sin duplicados.")
+                    st.toast("Base de datos Neon Actualizada", icon="✅")
+                    st.cache_data.clear()
+                    st.rerun()
 
 if form_categorias:
     nombres_pestanas = [cat["nombre"].upper() for cat in form_categorias]
@@ -582,6 +661,16 @@ else:
                 key=f"grilla_audit_fiel_{id_campana_destino}_{len(df_render_final)}"
             )
 
+# --- REEMPLAZO EN TU BARRA LATERAL (AL FINAL DEL ARCHIVO) ---
 with st.sidebar:
-    st.markdown("### 🏢 Centro de Control")
-    st.info(f"**Ámbito:** Corporativo\n\n**Mosaico:** Fiel Activo\n\n**Neon Status:** Conectado")
+    st.markdown("### ⚙️ Modos de Operación")
+    # Creamos la opción para alternar entre el Mosaico Visual y las Agrupaciones
+    modo_operacion = st.radio(
+        "Selecciona el método de carga:",
+        ["🖼️ Mosaico Fiel Estándar", "📦 Inyector por Agrupaciones (Packs)"]
+    )
+    
+    st.write("---")
+    st.markdown("### Centro de Control")
+    st.info(f"**Ámbito:** Corporativo\n\n**Mosaico:** {'Fiel Activo' if modo_operacion == '🖼️ Mosaico Fiel Estándar' else 'Packs de Carga'}\n\n**Neon Status:** Conectado")
+
