@@ -46,6 +46,7 @@ pagina_carga_masiva = st.Page("carga_masiva_imagen.py", title="Carga Masiva Imag
 pagina_cargar_imagen = st.Page("cargar_campanas_imagen.py", title="📋 Cargar Imagen", icon="📋")
 pagina_cargar21 = st.Page("cargar_campanas_imagen2.py", title="📋 Cargar Imagen 2", icon="📋")
 pagina_datos = st.Page("subir_csv.py", title="Subir Datos", icon="⚙️")
+pagina_packs = st.Page("cargar_packs.py", title="Cargar Packs", icon="⚙️")
 pagina_oferta_visual = st.Page("cargar_oferta_visual.py", title="Cargar Oferta Visual", icon="⚙️")
 pagina_oferta_activa = st.Page("carga_inicial_oferta_activa.py", title="Carga Inicial Ofertas", icon="⚙️")
 pagina_maqueta = st.Page("maquetacion.py", title="Maquetacion", icon="⚙️")
@@ -62,6 +63,7 @@ enrutador_global = st.navigation([
     pagina_cargar_imagen,
     pagina_cargar21,
     pagina_maqueta,
+    pagina_packs,
     pagina_oferta_activa,
     pagina_oferta_visual,
     pagina_ofertas,
