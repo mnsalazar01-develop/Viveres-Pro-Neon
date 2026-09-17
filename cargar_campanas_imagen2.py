@@ -314,6 +314,19 @@ with metric_col2: st.metric(label="🏪 SKUs Alerta Competencia", value=st.sessi
 with metric_col3: st.metric(label="📦 Total Mosaico Único", value=st.session_state.get("stat_total", 0))
 with metric_col4: st.metric(label="✅ Incluidos en Campaña Activa", value=st.session_state.get("stat_seleccionados", 0))
 
+
+# --- REEMPLAZO EN TU BARRA LATERAL (AL FINAL DEL ARCHIVO) ---
+with st.sidebar:
+    st.markdown("### ⚙️ Modos de Operación")
+    # Creamos la opción para alternar entre el Mosaico Visual y las Agrupaciones
+    modo_operacion = st.radio(
+        "Selecciona el método de carga:",
+        ["🖼️ Mosaico Fiel Estándar", "📦 Inyector por Agrupaciones (Packs)"]
+    )
+    
+    st.write("---")
+    st.markdown("### Centro de Control")
+    st.info(f"**Ámbito:** Corporativo\n\n**Mosaico:** {'Fiel Activo' if modo_operacion == '🖼️ Mosaico Fiel Estándar' else 'Packs de Carga'}\n\n**Neon Status:** Conectado")
 # =====================================================================
 # PROGRAMA: registro_ofertas_mosaico_fiel.py | PARTE 4 DE 5
 # MODULO: FUNCIÓN DE REJILLA VERTICAL (COMPATIBLE CON STRING TEXT IDs)
