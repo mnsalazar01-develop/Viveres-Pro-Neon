@@ -419,17 +419,171 @@ def dibujar_rejilla_mosaico_fiel(items_mosaico, _df_lab_activo, layout, _columna
                         "precio": input_precio,
                         "id_registro": id_activa_real
                     }
+        
 
 # --- BUSCA DONDE INICIA EL RENDER DE PESTAÑAS/PASILLOS ---
 if modo_operacion == "🖼️ Mosaico Fiel Estándar":
-    # =========================================================================
-    # TODO TU CÓDIGO ORIGINAL DESDE AQUÍ (Pestañas, Rejilla, Mosaico y Botones Corporativos)
-    # =========================================================================
     if form_categorias:
         nombres_pestanas = [cat["nombre"].upper() for cat in form_categorias]
         pestanas_ui = st.tabs(nombres_pestanas)
-        # ... (Mantén intacto todo tu bloque de código del mosaico hasta el final del reset de pizarra)
         
+        for index_tab, cat_info in enumerate(form_categorias):
+            id_categoria_actual = cat_info["id_cat"]
+            items_del_pasillo = [item for item in lista_items if int(item.get("id_cat", 0)) == int(id_categoria_actual)]
+            
+            with pestanas_ui[index_tab]:
+                sub_filtradas = [s for s in form_subcategorias if int(s["id_cat"]) == int(id_categoria_actual)]
+                opciones_sub = [{"id_subcat": None, "nombre": "--- VER TODO EL PASILLO ---"}] + sub_filtradas
+                sub_seleccionada = st.selectbox(f"Refinar surtido en {cat_info['nombre']}:", opciones_sub, format_func=lambda x: x["nombre"].upper(), key=f"sel_sub_{id_categoria_actual}")
+                
+                if sub_seleccionada["id_subcat"] is not None:
+                    items_finales_mosaico = [item for item in items_del_pasillo if int(item.get("id_subcat", 0)) == int(sub_seleccionada["id_subcat"])]
+                else:
+                    items_finales_mosaico = items_del_pasillo
+                    
+                if items_finales_mosaico:
+                    st.caption(f"Mostrando {len(items_finales_mosaico)} artículos en este segmento")
+                    dibujar_rejilla_mosaico_fiel(items_finales_mosaico, df_laboratorio_activo, layout_dinamico, columnas_elegidas, id_campana_destino, productos_en_campana_activa, res_o=res_o)  
+                else:
+                    st.info("No hay productos registrados con ofertas activas en este segmento.")
+    
+    # --- PANEL DE ACCIONES COMERCIALES CORPORATIVAS
+    st.write("---")
+    col_btn1, col_btn2 = st.columns(2)
+    
+    with col_btn1:
+        if st.button("🚀 Disparar Inyección Express de Todo lo Seleccionado", use_container_width=True, type="primary"):
+            payload_rafaga = []
+            
+            # 🌟 CORRECCIÓN: Leemos directamente del almacén temporal que recuerda todo entre pasillos
+            for id_prod, datos in st.session_state.get("marcador_temporal_checks", {}).items():
+                marcado_final = datos.get("marcado", False)
+                precio_final = datos.get("precio", 0.0)
+                id_reg_activa = datos.get("id_registro")
+                id_super_item = datos.get("id_super")
+                
+                # Solo procesamos lo que quedó marcado y tenga un precio válido
+                if marcado_final and precio_final > 0.0:
+                    payload_rafaga.append({
+                        "id_producto": str(id_prod).strip(),
+                        "precio": float(precio_final),
+                        "id_activa": id_reg_activa,
+                        "id_super": id_super_item
+                    })
+                    
+            if payload_rafaga:
+                conn = None
+                try:
+                    conn = psycopg2.connect(url_limpia)
+                    cur = conn.cursor()
+                    
+                    id_super_seguro = id_super_contexto if id_super_contexto is not None else st.session_state.get("id_super_operador")
+                        
+                    for reg in payload_rafaga:
+                        id_prod_clean = reg["id_producto"]
+                        id_final_super = id_super_seguro if id_super_seguro is not None else reg.get("id_super")
+                        
+                        if id_final_super is None:
+                            continue
+        
+                        # Query histórico con Upsert anti-duplicados
+                        query_insert = """
+                        INSERT INTO public.ofertas (
+                            id_producto, id_super, precio_oferta, id_campana,
+                            id_sucursal, numero_pagina, posicion_slot,
+                            es_favorita, en_lista_compras, oferta_comprada
+                        )
+                        VALUES (%s, %s, %s, %s, NULL, NULL, NULL, False, False, False)
+                        ON CONFLICT (id_producto, id_super, id_campana) 
+                        DO UPDATE SET 
+                            precio_oferta = EXCLUDED.precio_oferta;
+                        """
+                        cur.execute(query_insert, (
+                            id_prod_clean,
+                            int(id_final_super),
+                            reg["precio"],
+                            id_campana_destino
+                        ))
+                        
+                        # Query de Pizarra Activa
+                        query_upsert_activa = """
+                        INSERT INTO public.ofertas_activas (id_producto, id_super, precio_oferta_proyectado)
+                        VALUES (%s, %s, %s)
+                        ON CONFLICT (id_producto, id_super)
+                        DO UPDATE SET
+                            precio_oferta_proyectado = EXCLUDED.precio_oferta_proyectado,
+                            updated_at = CURRENT_TIMESTAMP;
+                        """
+                        cur.execute(query_upsert_activa, (
+                            id_prod_clean,
+                            int(id_final_super),
+                            reg["precio"]
+                        ))
+                        
+                    conn.commit()
+                    st.toast("¡Inyección Histórica y Pizarra Activa Sincronizadas!", icon="✅")
+                    
+                    # 🌟 IMPORTANTE: Como ya guardamos en la base de datos, vaciamos el marcador temporal 
+                    # de la memoria RAM para la siguiente tanda de selección
+                    st.session_state["marcador_temporal_checks"] = {}
+                    st.session_state["formulario_imagenes_dict"] = {}
+                    
+                    st.cache_data.clear()
+                    st.rerun()
+        
+                except Exception as err_api:
+                    if conn: conn.rollback()
+                    st.error(f"❌ Error de persistencia relacional en Neon: {err_api}")
+                finally:
+                    if conn: conn.close()
+            else:
+                st.warning("⚠️ No se ha detectado ningún elemento incluido con precio válido en memoria.")
+        
+        
+    with col_btn2:
+        if st.button("🧹 Limpiar y Resetear Pizarra Completa de Activos", use_container_width=True, type="secondary"):
+            query_delete = "DELETE FROM public.ofertas_activas;"
+            if ejecutar_consulta_neon(query_delete, (), fetch=False, commit=True):
+                st.session_state["formulario_imagenes_dict"] = {}
+                st.toast("¡Pizarra de últimos precios reseteada por completo!", icon="🗑️")
+                st.cache_data.clear()
+                st.rerun()
+    
+    # --- BITÁCORA DE CONTROL DE OFERTAS OFICIALES CONSOLIDADAS
+    st.write("---")
+    st.markdown(f"#### 3. Monitoreo de Ofertas Publicadas (Historial de Campaña)")
+    df_o_grid = pd.DataFrame(res_o) if res_o else pd.DataFrame()
+    
+    if not df_o_grid.empty and "id_campana" in df_o_grid.columns:
+        df_o_grid = df_o_grid[df_o_grid["id_campana"].fillna(0).astype(int) == int(id_campana_destino)]
+    
+    if df_o_grid.empty:
+        st.info("ℹ️ No se registran ofertas oficiales guardadas aún en esta campaña.")
+    else:
+        df_p_grid = pd.DataFrame(res_p) if res_p else pd.DataFrame()
+        if not df_p_grid.empty:
+            df_o_grid["id_producto"] = df_o_grid["id_producto"].astype(str).str.strip()
+            df_p_grid["id_producto"] = df_p_grid["id_producto"].astype(str).str.strip()
+            
+            df_merged = pd.merge(df_o_grid, df_p_grid, on="id_producto", how="inner")
+            if not df_merged.empty:
+                df_render_final = pd.DataFrame({
+                    "ID Oferta": df_merged.get("id_oferta", "-"),
+                    "Marca": df_merged["marca"].fillna("Sin Marca"),
+                    "Artículo": df_merged["nombre"],
+                    "Presentación": df_merged["tamano"].astype(str) + " " + df_merged["unidad"].astype(str),
+                    "Precio Corporativo ($)": df_merged["precio_oferta"].astype(float),
+                    "Cobertura": "CORPORATIVO (Nacional)"
+                }).sort_values(by=["Artículo", "ID Oferta"], ascending=[True, False])
+                
+                st.dataframe(
+                    df_render_final,
+                    column_config={"Precio Corporativo ($)": st.column_config.NumberColumn(format="$ %.2f")},
+                    hide_index=True,
+                    use_container_width=True,
+                    key=f"grilla_audit_fiel_{id_campana_destino}_{len(df_render_final)}"
+                )
+
 else:
     # =========================================================================
     # 📦 MÓDULO NUEVO: INYECTOR EXPRESS POR AGRUPACIONES (PACKS)
@@ -499,167 +653,6 @@ else:
                     st.toast("Base de datos Neon Actualizada", icon="✅")
                     st.cache_data.clear()
                     st.rerun()
-
-if form_categorias:
-    nombres_pestanas = [cat["nombre"].upper() for cat in form_categorias]
-    pestanas_ui = st.tabs(nombres_pestanas)
-    
-    for index_tab, cat_info in enumerate(form_categorias):
-        id_categoria_actual = cat_info["id_cat"]
-        items_del_pasillo = [item for item in lista_items if int(item.get("id_cat", 0)) == int(id_categoria_actual)]
-        
-        with pestanas_ui[index_tab]:
-            sub_filtradas = [s for s in form_subcategorias if int(s["id_cat"]) == int(id_categoria_actual)]
-            opciones_sub = [{"id_subcat": None, "nombre": "--- VER TODO EL PASILLO ---"}] + sub_filtradas
-            sub_seleccionada = st.selectbox(f"Refinar surtido en {cat_info['nombre']}:", opciones_sub, format_func=lambda x: x["nombre"].upper(), key=f"sel_sub_{id_categoria_actual}")
-            
-            if sub_seleccionada["id_subcat"] is not None:
-                items_finales_mosaico = [item for item in items_del_pasillo if int(item.get("id_subcat", 0)) == int(sub_seleccionada["id_subcat"])]
-            else:
-                items_finales_mosaico = items_del_pasillo
-                
-            if items_finales_mosaico:
-                st.caption(f"Mostrando {len(items_finales_mosaico)} artículos en este segmento")
-                dibujar_rejilla_mosaico_fiel(items_finales_mosaico, df_laboratorio_activo, layout_dinamico, columnas_elegidas, id_campana_destino, productos_en_campana_activa, res_o=res_o)  
-            else:
-                st.info("No hay productos registrados con ofertas activas en este segmento.")
-
-# --- PANEL DE ACCIONES COMERCIALES CORPORATIVAS
-st.write("---")
-col_btn1, col_btn2 = st.columns(2)
-
-with col_btn1:
-    if st.button("🚀 Disparar Inyección Express de Todo lo Seleccionado", use_container_width=True, type="primary"):
-        payload_rafaga = []
-        
-        # 🌟 CORRECCIÓN: Leemos directamente del almacén temporal que recuerda todo entre pasillos
-        for id_prod, datos in st.session_state.get("marcador_temporal_checks", {}).items():
-            marcado_final = datos.get("marcado", False)
-            precio_final = datos.get("precio", 0.0)
-            id_reg_activa = datos.get("id_registro")
-            id_super_item = datos.get("id_super")
-            
-            # Solo procesamos lo que quedó marcado y tenga un precio válido
-            if marcado_final and precio_final > 0.0:
-                payload_rafaga.append({
-                    "id_producto": str(id_prod).strip(),
-                    "precio": float(precio_final),
-                    "id_activa": id_reg_activa,
-                    "id_super": id_super_item
-                })
-                
-        if payload_rafaga:
-            conn = None
-            try:
-                conn = psycopg2.connect(url_limpia)
-                cur = conn.cursor()
-                
-                id_super_seguro = id_super_contexto if id_super_contexto is not None else st.session_state.get("id_super_operador")
-                    
-                for reg in payload_rafaga:
-                    id_prod_clean = reg["id_producto"]
-                    id_final_super = id_super_seguro if id_super_seguro is not None else reg.get("id_super")
-                    
-                    if id_final_super is None:
-                        continue
-    
-                    # Query histórico con Upsert anti-duplicados
-                    query_insert = """
-                    INSERT INTO public.ofertas (
-                        id_producto, id_super, precio_oferta, id_campana,
-                        id_sucursal, numero_pagina, posicion_slot,
-                        es_favorita, en_lista_compras, oferta_comprada
-                    )
-                    VALUES (%s, %s, %s, %s, NULL, NULL, NULL, False, False, False)
-                    ON CONFLICT (id_producto, id_super, id_campana) 
-                    DO UPDATE SET 
-                        precio_oferta = EXCLUDED.precio_oferta;
-                    """
-                    cur.execute(query_insert, (
-                        id_prod_clean,
-                        int(id_final_super),
-                        reg["precio"],
-                        id_campana_destino
-                    ))
-                    
-                    # Query de Pizarra Activa
-                    query_upsert_activa = """
-                    INSERT INTO public.ofertas_activas (id_producto, id_super, precio_oferta_proyectado)
-                    VALUES (%s, %s, %s)
-                    ON CONFLICT (id_producto, id_super)
-                    DO UPDATE SET
-                        precio_oferta_proyectado = EXCLUDED.precio_oferta_proyectado,
-                        updated_at = CURRENT_TIMESTAMP;
-                    """
-                    cur.execute(query_upsert_activa, (
-                        id_prod_clean,
-                        int(id_final_super),
-                        reg["precio"]
-                    ))
-                    
-                conn.commit()
-                st.toast("¡Inyección Histórica y Pizarra Activa Sincronizadas!", icon="✅")
-                
-                # 🌟 IMPORTANTE: Como ya guardamos en la base de datos, vaciamos el marcador temporal 
-                # de la memoria RAM para la siguiente tanda de selección
-                st.session_state["marcador_temporal_checks"] = {}
-                st.session_state["formulario_imagenes_dict"] = {}
-                
-                st.cache_data.clear()
-                st.rerun()
-    
-            except Exception as err_api:
-                if conn: conn.rollback()
-                st.error(f"❌ Error de persistencia relacional en Neon: {err_api}")
-            finally:
-                if conn: conn.close()
-        else:
-            st.warning("⚠️ No se ha detectado ningún elemento incluido con precio válido en memoria.")
-    
-    
-with col_btn2:
-    if st.button("🧹 Limpiar y Resetear Pizarra Completa de Activos", use_container_width=True, type="secondary"):
-        query_delete = "DELETE FROM public.ofertas_activas;"
-        if ejecutar_consulta_neon(query_delete, (), fetch=False, commit=True):
-            st.session_state["formulario_imagenes_dict"] = {}
-            st.toast("¡Pizarra de últimos precios reseteada por completo!", icon="🗑️")
-            st.cache_data.clear()
-            st.rerun()
-
-# --- BITÁCORA DE CONTROL DE OFERTAS OFICIALES CONSOLIDADAS
-st.write("---")
-st.markdown(f"#### 3. Monitoreo de Ofertas Publicadas (Historial de Campaña)")
-df_o_grid = pd.DataFrame(res_o) if res_o else pd.DataFrame()
-
-if not df_o_grid.empty and "id_campana" in df_o_grid.columns:
-    df_o_grid = df_o_grid[df_o_grid["id_campana"].fillna(0).astype(int) == int(id_campana_destino)]
-
-if df_o_grid.empty:
-    st.info("ℹ️ No se registran ofertas oficiales guardadas aún en esta campaña.")
-else:
-    df_p_grid = pd.DataFrame(res_p) if res_p else pd.DataFrame()
-    if not df_p_grid.empty:
-        df_o_grid["id_producto"] = df_o_grid["id_producto"].astype(str).str.strip()
-        df_p_grid["id_producto"] = df_p_grid["id_producto"].astype(str).str.strip()
-        
-        df_merged = pd.merge(df_o_grid, df_p_grid, on="id_producto", how="inner")
-        if not df_merged.empty:
-            df_render_final = pd.DataFrame({
-                "ID Oferta": df_merged.get("id_oferta", "-"),
-                "Marca": df_merged["marca"].fillna("Sin Marca"),
-                "Artículo": df_merged["nombre"],
-                "Presentación": df_merged["tamano"].astype(str) + " " + df_merged["unidad"].astype(str),
-                "Precio Corporativo ($)": df_merged["precio_oferta"].astype(float),
-                "Cobertura": "CORPORATIVO (Nacional)"
-            }).sort_values(by=["Artículo", "ID Oferta"], ascending=[True, False])
-            
-            st.dataframe(
-                df_render_final,
-                column_config={"Precio Corporativo ($)": st.column_config.NumberColumn(format="$ %.2f")},
-                hide_index=True,
-                use_container_width=True,
-                key=f"grilla_audit_fiel_{id_campana_destino}_{len(df_render_final)}"
-            )
 
 # --- REEMPLAZO EN TU BARRA LATERAL (AL FINAL DEL ARCHIVO) ---
 with st.sidebar:
