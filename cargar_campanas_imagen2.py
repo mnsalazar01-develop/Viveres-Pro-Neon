@@ -596,75 +596,138 @@ if modo_operacion == "🖼️ Mosaico Fiel Estándar":
                     use_container_width=True,
                     key=f"grilla_audit_fiel_{id_campana_destino}_{len(df_render_final)}"
                 )
-
 else:
     # =========================================================================
-    # 📦 MÓDULO NUEVO: INYECTOR EXPRESS POR AGRUPACIONES (PACKS)
+    # 📦 MÓDULO: INYECTOR EXPRESS POR AGRUPACIONES (PACKS)
     # =========================================================================
-    st.markdown("### 📦 Inyección Masiva por Agrupación de Productos")
+    st.markdown("### 📦 Inyección Masiva por Agrupación de Productos (Packs)")
     st.caption("Esta herramienta inyecta un listado predefinido de SKUs directamente en la campaña y supermercado seleccionados arriba.")
     
-    # 1. Validaciones de contexto de coordenadas comerciales superiores
-    if not id_campana_destino or id_super_contexto is None:
-        st.warning("⚠️ Por favor, selecciona primero un **Supermercado** y una **Campaña** en las coordenadas superiores.")
-    else:
-        # 2. Descarga de Catálogos de Packs y Componentes
-        res_packs = ejecutar_consulta_neon("SELECT id_producto, nombre FROM public.productos WHERE es_pack = TRUE ORDER BY nombre ASC;") or []
-        
-        if not res_packs:
-            st.info("ℹ️ No se encontraron agrupaciones de productos registradas en la tabla `public.productos` (con `es_pack = true`).")
+    # Creamos sub-pestañas internas para mantener la interfaz ultra limpia
+    sub_tab_cargar, sub_tab_crear = st.tabs(["🚀 Cargar Pack en Ofertas", "⚙️ Crear Nueva Agrupación"])
+    
+    # --- PESTAÑA 1: CARGAR PACK EXISTENTE ---
+    with sub_tab_cargar:
+        if not id_campana_destino or id_super_contexto is None:
+            st.warning("⚠️ Por favor, selecciona primero un **Supermercado** y una **Campaña** en las coordenadas superiores.")
         else:
-            col_pk1, col_pk2 = st.columns(2)
+            res_packs = ejecutar_consulta_neon(
+                "SELECT id_producto, nombre FROM public.productos WHERE es_pack = TRUE ORDER BY nombre ASC;"
+            ) or []
             
-            with col_pk1:
-                # Diccionario de lectura limpia para el selectbox
-                dict_packs = {p['id_producto']: p['nombre'] for p in res_packs}
-                pack_seleccionado = st.selectbox(
-                    "Selecciona la Agrupación (Pack) a cargar:",
-                    options=list(dict_packs.keys()),
-                    format_func=lambda x: dict_packs.get(x)
-                )
-            
-            with col_pk2:
-                st.markdown("**📋 Productos incluidos en esta plantilla:**")
-                res_componentes = ejecutar_consulta_neon("""
-                    SELECT p.nombre, p.marca, p.tamano, p.unidad, pc.cantidad 
-                    FROM public.pack_componentes pc
-                    JOIN public.productos p ON pc.id_producto_real = p.id_producto
-                    WHERE pc.id_pack = %s;
-                """, (pack_seleccionado,)) or []
+            if not res_packs:
+                st.info("ℹ️ No se encontraron agrupaciones de productos registradas en el sistema.")
+            else:
+                col_pk1, col_pk2 = st.columns(2)
                 
-                if res_componentes:
-                    for comp in res_componentes:
-                        st.markdown(f"- **{comp['nombre']}** ({comp['marca']}) - *Cant: {comp['cantidad']}*")
-                else:
-                    st.caption("Esta agrupación no contiene componentes asignados en la tabla `pack_componentes`.")
-            
-            st.write("---")
-            
-            # 3. Botón de Inyección Relacional Automática en Lote
-            if st.button("⚡ Ejecutar Carga Masiva de la Agrupación", type="primary", use_container_width=True):
-                # Consulta SQL optimizada en base a tu CONSTRAINT "unique_producto_super_campana"
-                query_insert_lote = """
-                    INSERT INTO public.ofertas (id_campana, id_super, id_producto, precio_oferta, es_favorita, en_lista_compras, oferta_comprada)
-                    SELECT %s, %s, id_producto_real, 0.0, False, False, False
-                    FROM public.pack_componentes 
-                    WHERE id_pack = %s
-                    ON CONFLICT ON CONSTRAINT unique_producto_super_campana DO NOTHING;
-                """
+                with col_pk1:
+                    dict_packs = {p['id_producto']: p['nombre'] for p in res_packs}
+                    pack_seleccionado = st.selectbox(
+                        "Selecciona la Agrupación (Pack) a cargar:",
+                        options=list(dict_packs.keys()),
+                        format_func=lambda x: dict_packs.get(x)
+                    )
                 
-                # Ejecutamos la consulta usando tu motor nativo
-                resultado_accion = ejecutar_consulta_neon(
-                    query_insert_lote, 
-                    (int(id_campana_destino), int(id_super_contexto), pack_seleccionado), 
-                    fetch=False, 
-                    commit=True
-                )
+                with col_pk2:
+                    st.markdown("**📋 Productos incluidos en esta plantilla:**")
+                    res_componentes = ejecutar_consulta_neon("""
+                        SELECT p.nombre, p.marca, p.tamano, p.unidad, pc.cantidad 
+                        FROM public.pack_componentes pc
+                        JOIN public.productos p ON pc.id_producto_real = p.id_producto
+                        WHERE pc.id_pack = %s;
+                    """, (pack_seleccionado,)) or []
+                    
+                    if res_componentes:
+                        for comp in res_componentes:
+                            st.markdown(f"- **{comp['nombre']}** ({comp['marca']}) - *Cant: {comp['cantidad']}*")
+                    else:
+                        st.caption("Esta agrupación no contiene componentes asignados.")
                 
-                if resultado_accion:
-                    st.success("🎉 ¡Agrupación procesada correctamente! Los productos se han vinculado a la campaña sin duplicados.")
-                    st.toast("Base de datos Neon Actualizada", icon="✅")
-                    st.cache_data.clear()
-                    st.rerun()
+                st.write("---")
+                
+                if st.button("⚡ Ejecutar Carga Masiva de la Agrupación", type="primary", use_container_width=True):
+                    query_insert_lote = """
+                        INSERT INTO public.ofertas (
+                            id_campana, id_super, id_producto, precio_oferta, 
+                            es_favorita, en_lista_compras, oferta_comprada
+                        )
+                        SELECT %s, %s, id_producto_real, 0.0, False, False, False
+                        FROM public.pack_componentes 
+                        WHERE id_pack = %s
+                        ON CONFLICT ON CONSTRAINT unique_producto_super_campana DO NOTHING;
+                    """
+                    
+                    resultado_accion = ejecutar_consulta_neon(
+                        query_insert_lote, 
+                        (int(id_campana_destino), int(id_super_contexto), pack_seleccionado), 
+                        fetch=False, 
+                        commit=True
+                    )
+                    
+                    if resultado_accion:
+                        st.success("🎉 ¡Agrupación procesada correctamente! Los productos se han vinculado a la campaña sin duplicados.")
+                        st.toast("Base de datos Neon Actualizada", icon="✅")
+                        st.cache_data.clear()
+                        st.rerun()
 
+    # --- PESTAÑA 2: CREACIÓN AUTOMÁTICA E INCREMENTAL ---
+    with sub_tab_crear:
+        st.markdown("#### 🆕 Registrar Nueva Plantilla de Agrupación")
+        
+        # Recuperamos los productos reales para el selector múltiple
+        res_prod_reales = ejecutar_consulta_neon(
+            "SELECT id_producto, nombre, marca FROM public.productos WHERE es_pack IS NOT TRUE ORDER BY nombre ASC;"
+        ) or []
+        
+        with st.form("form_nuevo_pack_incremental", clear_on_submit=True):
+            # El usuario SOLO define las propiedades comerciales básicas, el ID es automático
+            nombre_pack = st.text_input("Nombre de la Agrupación (Ej: Pack Canasta Básica Familiar):")
+            
+            seleccionados = st.multiselect(
+                "Selecciona los productos individuales que compondrán este bloque de carga:",
+                options=[p['id_producto'] for p in res_prod_reales],
+                format_func=lambda x: next(f"{p['nombre']} ({p['marca']})" for p in res_prod_reales if p['id_producto'] == x)
+            )
+            
+            if st.form_submit_button("Guardar Configuración del Pack"):
+                if not nombre_pack or len(seleccionados) < 2:
+                    st.error("❌ Completa el nombre y selecciona al menos 2 productos para poder consolidar el grupo.")
+                else:
+                    # Lógica de inserción secuencial y relacional directa
+                    conn = None
+                    try:
+                        import psycopg2
+                        url_limpia = st.secrets["neon"]["url"]
+                        conn = psycopg2.connect(url_limpia)
+                        cur = conn.cursor()
+                        
+                        # 1. Al no definir id_producto, Neon busca el siguiente valor incremental de la secuencia
+                        query_madre = """
+                            INSERT INTO public.productos (nombre, es_pack) 
+                            VALUES (%s, TRUE) 
+                            RETURNING id_producto;
+                        """
+                        cur.execute(query_madre, (nombre_pack,))
+                        
+                        # Capturamos el ID incremental generado por el motor relacional
+                        nuevo_id_pack = cur.fetchone()[0]
+                        
+                        # 2. Inyectamos los componentes vinculados a ese ID recién creado
+                        for prod_id in seleccionados:
+                            cur.execute("""
+                                INSERT INTO public.pack_componentes (id_pack, id_producto_real, cantidad) 
+                                VALUES (%s, %s, 1);
+                            """, (nuevo_id_pack, prod_id))
+                            
+                        conn.commit()
+                        st.success(f"✨ ¡Agrupación registrada! Se generó automáticamente el ID: `{nuevo_id_pack}`")
+                        st.toast("Estructura guardada con éxito", icon="📦")
+                        st.cache_data.clear()
+                        st.rerun()
+                        
+                    except Exception as e:
+                        if conn: conn.rollback()
+                        st.error(f"❌ Fallo al escribir la secuencia en Neon: {e}")
+                    finally:
+                        if conn: conn.close()
 
