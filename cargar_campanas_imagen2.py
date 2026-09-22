@@ -567,35 +567,41 @@ if modo_operacion == "🖼️ Mosaico Fiel Estándar":
     st.markdown(f"#### 3. Monitoreo de Ofertas Publicadas (Historial de Campaña)")
     df_o_grid = pd.DataFrame(res_o) if res_o else pd.DataFrame()
     
-    if not df_o_grid.empty and "id_campana" in df_o_grid.columns:
-        df_o_grid = df_o_grid[df_o_grid["id_campana"].fillna(0).astype(int) == int(id_campana_destino)]
-    
-    if df_o_grid.empty:
-        st.info("ℹ️ No se registran ofertas oficiales guardadas aún en esta campaña.")
+    # Candado de Seguridad: Validamos de forma estricta que exista una campaña de destino seleccionada
+    if id_campana_destino is None:
+        st.warning(" 📌 Por favor, selecciona una Campaña en el panel superior para desplegar el historial de monitoreo.")
     else:
-        df_p_grid = pd.DataFrame(res_p) if res_p else pd.DataFrame()
-        if not df_p_grid.empty:
-            df_o_grid["id_producto"] = df_o_grid["id_producto"].astype(str).str.strip()
-            df_p_grid["id_producto"] = df_p_grid["id_producto"].astype(str).str.strip()
-            
-            df_merged = pd.merge(df_o_grid, df_p_grid, on="id_producto", how="inner")
-            if not df_merged.empty:
-                df_render_final = pd.DataFrame({
-                    "ID Oferta": df_merged.get("id_oferta", "-"),
-                    "Marca": df_merged["marca"].fillna("Sin Marca"),
-                    "Artículo": df_merged["nombre"],
-                    "Presentación": df_merged["tamano"].astype(str) + " " + df_merged["unidad"].astype(str),
-                    "Precio Corporativo ($)": df_merged["precio_oferta"].astype(float),
-                    "Cobertura": "CORPORATIVO (Nacional)"
-                }).sort_values(by=["Artículo", "ID Oferta"], ascending=[True, False])
+        # Si la campaña es válida, filtramos de forma segura evitando romper por valores vacíos (NaN)
+        if not df_o_grid.empty and "id_campana" in df_o_grid.columns:
+            # Convertimos la columna de la BD a entero ignorando valores corruptos y comparamos contra el ID destino seguro
+            df_o_grid = df_o_grid[pd.to_numeric(df_o_grid["id_campana"], errors='coerce').fillna(0).astype(int) == int(id_campana_destino)]
+           
+        if df_o_grid.empty:
+            st.info("ℹ️ No se registran ofertas oficiales guardadas aún en esta campaña.")
+        else:
+            df_p_grid = pd.DataFrame(res_p) if res_p else pd.DataFrame()
+            if not df_p_grid.empty:
+                df_o_grid["id_producto"] = df_o_grid["id_producto"].astype(str).str.strip()
+                df_p_grid["id_producto"] = df_p_grid["id_producto"].astype(str).str.strip()
                 
-                st.dataframe(
-                    df_render_final,
-                    column_config={"Precio Corporativo ($)": st.column_config.NumberColumn(format="$ %.2f")},
-                    hide_index=True,
-                    use_container_width=True,
-                    key=f"grilla_audit_fiel_{id_campana_destino}_{len(df_render_final)}"
-                )
+                df_merged = pd.merge(df_o_grid, df_p_grid, on="id_producto", how="inner")
+                if not df_merged.empty:
+                    df_render_final = pd.DataFrame({
+                        "ID Oferta": df_merged.get("id_oferta", "-"),
+                        "Marca": df_merged["marca"].fillna("Sin Marca"),
+                        "Artículo": df_merged["nombre"],
+                        "Presentación": df_merged["tamano"].astype(str) + " " + df_merged["unidad"].astype(str),
+                        "Precio Corporativo ($)": df_merged["precio_oferta"].astype(float),
+                        "Cobertura": "CORPORATIVO (Nacional)"
+                    }).sort_values(by=["Artículo", "ID Oferta"], ascending=[True, False])
+                    
+                    st.dataframe(
+                        df_render_final,
+                        column_config={"Precio Corporativo ($)": st.column_config.NumberColumn(format="$ %.2f")},
+                        hide_index=True,
+                        use_container_width=True,
+                        key=f"grilla_audit_fiel_{id_campana_destino}_{len(df_render_final)}"
+                    )
 else:
     # =========================================================================
     # 📦 MÓDULO: INYECTOR EXPRESS POR AGRUPACIONES (PACKS)
