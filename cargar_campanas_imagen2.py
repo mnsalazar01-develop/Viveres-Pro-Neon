@@ -173,7 +173,7 @@ with col_s3:
         10: {"altura_px": 65, "font_b": "0.65rem", "font_span": "0.58rem", "trim": 14},
         12: {"altura_px": 50, "font_b": "0.58rem", "font_span": "0.52rem", "trim": 10}
     }
-    layout_dinamico = config_zoom.get(columnas_elegidas, config_zoom[6])
+    layout_dinamico = config_zoom.get(columnas_elegidas, config_zoom[10])
     
 # =====================================================================
 # PROGRAMA: registro_ofertas_mosaico_fiel.py | PARTE 3 DE 5 (FILTRO JERÁRQUICO)
