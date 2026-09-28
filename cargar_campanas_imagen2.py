@@ -166,7 +166,7 @@ with col_s2:
 
     
 with col_s3:
-    columnas_elegidas = st.slider("Columnas por Fila (Densidad):", min_value=6, max_value=12, value=6, step=2)
+    columnas_elegidas = st.slider("Columnas por Fila (Densidad):", min_value=6, max_value=12, value=10, step=2)
     config_zoom = {
         6: {"altura_px": 85, "font_b": "0.72rem", "font_span": "0.62rem", "trim": 20},
         8: {"altura_px": 70, "font_b": "0.70rem", "font_span": "0.60rem", "trim": 16},
