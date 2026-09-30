@@ -5,7 +5,7 @@
 import streamlit as st
 import pandas as pd
 import psycopg
-from psycopg2.extras import RealDictCursor
+from psycopg.extras import RealDictCursor
 import urllib.parse
 from datetime import datetime
 
